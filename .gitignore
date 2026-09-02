@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# SUMO runtime
+sumo/work/
+*.net.xml
+*.rou.xml
+!sumo/templates/**
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Exports / tmp
+tmp/
+*.csv
+!frontend/public/**

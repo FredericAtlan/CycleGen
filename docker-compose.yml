@@ -1,0 +1,47 @@
+services:
+  sumo:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.sumo
+    ports:
+      - "8813:8813"
+    volumes:
+      - ./sumo:/sumo:ro
+      - sumo_work:/tmp/cyclegen-sumo
+    environment:
+      SUMO_HOME: /usr/share/sumo
+      SUMO_PORT: "8813"
+    # TraCI listener is started per-simulation by the API; this service
+    # keeps a SUMO-capable image warm with shared tools (netconvert, sumo).
+    command: ["sleep", "infinity"]
+    healthcheck:
+      test: ["CMD", "which", "sumo"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      SUMO_HOST: sumo
+      SUMO_PORT: "8813"
+      SUMO_BINARY: sumo
+      SUMO_HOME: /usr/share/sumo
+      SUMO_WORK_DIR: /tmp/cyclegen-sumo
+    volumes:
+      - ./backend/app:/app/app
+      - sumo_work:/tmp/cyclegen-sumo
+      - ./sumo:/sumo:ro
+    depends_on:
+      sumo:
+        condition: service_healthy
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+volumes:
+  sumo_work:
