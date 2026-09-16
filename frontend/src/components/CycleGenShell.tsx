@@ -460,7 +460,6 @@ export default function CycleGenShell() {
   const [legalSmoothModeLocal, setLegalSmoothModeLocal] =
     useState<LegalSmoothMode>("majority");
   const [legalSmoothWindowLocal, setLegalSmoothWindowLocal] = useState(250);
-  const [slopeSpatialWindowLocal, setSlopeSpatialWindowLocal] = useState(150);
   const [trapLengthMLocal, setTrapLengthMLocal] = useState(50);
   const [corridorProfileBusy, setCorridorProfileBusy] = useState(false);
   const [includeTrafficLights, setIncludeTrafficLights] = useState(
@@ -3276,11 +3275,14 @@ export default function CycleGenShell() {
               })}
               elevationCombine={elevationCombine}
               onElevationCombineChange={setElevationCombine}
-              slopeSpatialWindowM={slopeSpatialWindowLocal}
-              onSlopeSpatialWindowChange={(w) => {
-                setSlopeSpatialWindowLocal(w);
-                setSlopeAlgo((prev) => ({ ...prev, sgMinSpanM: w }));
-              }}
+              slopeSmoothPreset={slopeAlgo.smoothPreset}
+              onSlopeSmoothPresetChange={(p) =>
+                setSlopeAlgo((prev) => ({ ...prev, smoothPreset: p }))
+              }
+              slopeMaxGrade={slopeAlgo.maxGrade}
+              onSlopeMaxGradeChange={(g) =>
+                setSlopeAlgo((prev) => ({ ...prev, maxGrade: g }))
+              }
               alphaMinPct={slopeAlgo.alphaMinPct ?? null}
               onAlphaMinPctChange={(v) =>
                 setSlopeAlgo((prev) => ({ ...prev, alphaMinPct: v }))

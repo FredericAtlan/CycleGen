@@ -37,6 +37,12 @@ import {
   ChartFocusSlot,
 } from "@/components/corridor/ChartFocusHost";
 import type { SlopeUnit } from "@/lib/units";
+import {
+  MAX_GRADE_OPTIONS,
+  SLOPE_SMOOTH_PRESETS,
+  TRAP_LENGTH_OPTIONS,
+  type SlopeSmoothPreset,
+} from "@/lib/slopeAlgo";
 
 export type LegalSmoothMode = "none" | "majority" | "min" | "mean_snap";
 export type ElevationCombineMode = "mean" | "min" | "max";
@@ -73,8 +79,10 @@ export type ConstraintWorkspaceProps = {
   elevationSourceRows: ElevationSourceRow[];
   elevationCombine: ElevationCombineMode;
   onElevationCombineChange: (mode: ElevationCombineMode) => void;
-  slopeSpatialWindowM: number;
-  onSlopeSpatialWindowChange: (w: number) => void;
+  slopeSmoothPreset: SlopeSmoothPreset;
+  onSlopeSmoothPresetChange: (p: SlopeSmoothPreset) => void;
+  slopeMaxGrade: number;
+  onSlopeMaxGradeChange: (g: number) => void;
   alphaMinPct: number | null;
   onAlphaMinPctChange: (v: number | null) => void;
   alphaMaxPct: number | null;
@@ -124,8 +132,10 @@ export default function ConstraintWorkspace(props: ConstraintWorkspaceProps) {
     elevationSourceRows,
     elevationCombine,
     onElevationCombineChange,
-    slopeSpatialWindowM,
-    onSlopeSpatialWindowChange,
+    slopeSmoothPreset,
+    onSlopeSmoothPresetChange,
+    slopeMaxGrade,
+    onSlopeMaxGradeChange,
     alphaMinPct,
     onAlphaMinPctChange,
     alphaMaxPct,
@@ -310,48 +320,24 @@ export default function ConstraintWorkspace(props: ConstraintWorkspaceProps) {
                 }}
                 disabled={disabled}
               />
-              <div className="rounded-md border border-slate-200 bg-slate-50/80 p-2.5">
-                <label className="mb-1 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  <span>Processeur spatial (Z)</span>
-                  <span className="text-[10px] font-normal text-slate-500">
-                    fenêtre {slopeSpatialWindowM} m
-                  </span>
-                </label>
-                <input
-                  type="range"
-                  min={30}
-                  max={500}
-                  step={10}
-                  value={slopeSpatialWindowM}
-                  disabled={disabled}
-                  onChange={(e) => {
-                    onSlopeSpatialWindowChange(Number(e.target.value));
-                    onRequestRebuild?.();
-                  }}
-                  className="w-full accent-brand"
-                />
-                <div className="mt-2 grid grid-cols-2 gap-1.5">
-                  <label className="flex items-center gap-1 text-[10px] text-slate-600">
-                    <span className="whitespace-nowrap">L trap (m)</span>
-                    <input
-                      type="number"
-                      className="w-full rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px]"
-                      min={10}
-                      max={500}
-                      step={10}
-                      value={trapLengthM}
-                      disabled={disabled}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        if (Number.isFinite(v)) {
-                          onTrapLengthMChange(v);
-                          onRequestRebuild?.();
-                        }
-                      }}
-                    />
-                  </label>
-                </div>
-              </div>
+              <SlopeFilterControls
+                smoothPreset={slopeSmoothPreset}
+                onSmoothPresetChange={(p) => {
+                  onSlopeSmoothPresetChange(p);
+                  onRequestRebuild?.();
+                }}
+                maxGrade={slopeMaxGrade}
+                onMaxGradeChange={(g) => {
+                  onSlopeMaxGradeChange(g);
+                  onRequestRebuild?.();
+                }}
+                trapLengthM={trapLengthM}
+                onTrapLengthMChange={(v) => {
+                  onTrapLengthMChange(v);
+                  onRequestRebuild?.();
+                }}
+                disabled={disabled}
+              />
               <MinMaxRow
                 label="Pente min / max (%)"
                 minValue={alphaMinPct}
@@ -374,7 +360,7 @@ export default function ConstraintWorkspace(props: ConstraintWorkspaceProps) {
               <ChartFocusSlot
                 chartId="workspace.slope"
                 title="Pente continue α(s)"
-                subtitle={`fenêtre Z = ${slopeSpatialWindowM} m`}
+                subtitle={`preset SG ${slopeSmoothPreset}`}
                 renderEnlarged={() => (
                   <SlopeChart
                     corridor={corridor}
@@ -535,6 +521,103 @@ function SpatialFilterControls({
         onChange={(e) => onWindowChange(Number(e.target.value))}
         className="mt-2 w-full accent-brand"
       />
+    </div>
+  );
+}
+
+function SlopeFilterControls({
+  smoothPreset,
+  onSmoothPresetChange,
+  maxGrade,
+  onMaxGradeChange,
+  trapLengthM,
+  onTrapLengthMChange,
+  disabled,
+}: {
+  smoothPreset: SlopeSmoothPreset;
+  onSmoothPresetChange: (p: SlopeSmoothPreset) => void;
+  maxGrade: number;
+  onMaxGradeChange: (g: number) => void;
+  trapLengthM: number;
+  onTrapLengthMChange: (v: number) => void;
+  disabled?: boolean;
+}) {
+  const activePreset =
+    SLOPE_SMOOTH_PRESETS.find((p) => p.id === smoothPreset) ??
+    SLOPE_SMOOTH_PRESETS[1];
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50/80 p-2.5">
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        Filtre spatial Z → α
+      </p>
+      <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
+        {SLOPE_SMOOTH_PRESETS.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            className={`rounded border px-1.5 py-1 text-[10px] font-semibold ${
+              smoothPreset === p.id
+                ? "border-slate-900 bg-slate-900 text-white"
+                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+            }`}
+            disabled={disabled}
+            title={p.hint}
+            onClick={() => onSmoothPresetChange(p.id)}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <p className="mt-1 text-[10px] leading-snug text-slate-500">
+        SG {activePreset.smoothWindow} pts · MA {activePreset.sgMinSpanM} m ·
+        ordre {activePreset.polyorder}
+      </p>
+      <label className="mt-2 block text-[11px] font-medium text-slate-700">
+        <span className="mb-1 flex items-center justify-between">
+          <span>Clamp grade DEM max</span>
+          <span className="text-[10px] font-normal text-slate-500 tabular-nums">
+            {(maxGrade * 100).toFixed(0)} %
+          </span>
+        </span>
+        <select
+          className="w-full rounded border border-slate-200 bg-white px-1.5 py-1 text-[11px]"
+          value={String(maxGrade)}
+          disabled={disabled}
+          onChange={(e) => onMaxGradeChange(Number(e.target.value))}
+        >
+          {MAX_GRADE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={String(opt.value)}>
+              {opt.label} · {opt.hint}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="mt-2 block text-[11px] font-medium text-slate-700">
+        <span className="mb-1 flex items-center justify-between">
+          <span>Longueur trapèze L</span>
+          <span className="text-[10px] font-normal text-slate-500 tabular-nums">
+            {trapLengthM.toFixed(0)} m
+          </span>
+        </span>
+        <div className="flex flex-wrap gap-1">
+          {TRAP_LENGTH_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              disabled={disabled}
+              onClick={() => onTrapLengthMChange(opt.value)}
+              title={opt.hint}
+              className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${
+                trapLengthM === opt.value
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </label>
     </div>
   );
 }
