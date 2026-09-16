@@ -37,12 +37,15 @@ import {
   ChartFocusSlot,
 } from "@/components/corridor/ChartFocusHost";
 import type { SlopeUnit } from "@/lib/units";
+import { slopeUnitLabel } from "@/lib/units";
+import SlopeUnitToggle from "@/components/SlopeUnitToggle";
 import {
   MAX_GRADE_OPTIONS,
   SLOPE_SMOOTH_PRESETS,
   TRAP_LENGTH_OPTIONS,
   type SlopeSmoothPreset,
 } from "@/lib/slopeAlgo";
+import { ROUTER_LABELS } from "@/lib/types";
 
 export type LegalSmoothMode = "none" | "majority" | "min" | "mean_snap";
 export type ElevationCombineMode = "mean" | "min" | "max";
@@ -155,27 +158,70 @@ export default function ConstraintWorkspace(props: ConstraintWorkspaceProps) {
 
   const routerSummary = useMemo(() => {
     if (!routersUsed?.length) return null;
-    return routersUsed.join(" · ");
+    return routersUsed
+      .map((k) => ROUTER_LABELS[k]?.split(" / ")[0] ?? k)
+      .join(" · ");
   }, [routersUsed]);
+
+  const activeMaskLabels = useMemo(() => {
+    const out: string[] = [];
+    if (envelopeMask.legal) out.push("Légal");
+    if (envelopeMask.traffic) out.push("Trafic");
+    if (envelopeMask.curve) out.push("Courbure");
+    return out.length ? out.join(" + ") : "Vmax seule";
+  }, [envelopeMask]);
+
+  const legalFilterLabel =
+    legalSmoothMode === "none"
+      ? "off"
+      : `${legalSmoothMode} ${legalSmoothWindowM} m`;
+
+  const slopePresetLabel =
+    SLOPE_SMOOTH_PRESETS.find((p) => p.id === slopeSmoothPreset)?.label ??
+    slopeSmoothPreset;
+
+  const elevSummary = useMemo(() => {
+    if (elevationSources.length === 0) return "aucune";
+    if (elevationSources.length === 1) return elevationSources[0];
+    return `${elevationSources.length} sources · ${elevationCombine}`;
+  }, [elevationSources, elevationCombine]);
+
+  const vClampSummary =
+    speedMinKmh != null || speedMaxKmh != null
+      ? `V ${speedMinKmh ?? "—"} → ${speedMaxKmh ?? "—"} km/h`
+      : "sans clamp";
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto p-3">
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-slate-900">
-            Atelier Contraintes — f(s)
+            Atelier Contraintes — domaine spatial f(s)
           </h2>
           <p className="text-[11px] text-slate-500">
-            {routerSummary
-              ? `Routeurs actifs : ${routerSummary}`
-              : "Aucun routeur actif"}
+            Infrastructure routière ·{" "}
             {corridor.S.length > 0
-              ? ` · S = ${(corridor.S[corridor.S.length - 1] / 1000).toFixed(1)} km`
-              : ""}
+              ? `S = ${(corridor.S[corridor.S.length - 1] / 1000).toFixed(1)} km`
+              : "corridor non prêt"}
           </p>
         </div>
         <TabBar tab={tab} onChange={setTab} />
       </header>
+
+      {/* Bandeau récap — état spatial complet en une ligne */}
+      <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-[11px] leading-snug text-slate-700 shadow-sm">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <RecapChip label="Route" value={routerSummary ?? "—"} />
+          <RecapChip
+            label="Vitesse"
+            value={`${activeMaskLabels} · filtre ${legalFilterLabel} · ${vClampSummary}`}
+          />
+          <RecapChip
+            label="Pente"
+            value={`Z ${elevSummary} · SG ${slopePresetLabel} · L ${trapLengthM} m · clamp ${(slopeMaxGrade * 100).toFixed(0)} %`}
+          />
+        </div>
+      </div>
 
       {(tab === "speed" || tab === "both") && (
         <SectionCard
@@ -187,24 +233,46 @@ export default function ConstraintWorkspace(props: ConstraintWorkspaceProps) {
         >
           <div className="grid gap-3 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
             <div className="flex flex-col gap-2">
-              <RouterSpeedToggles
-                rows={speedSourceRows}
-                selected={speedSources}
-                onChange={(next) => {
-                  onSpeedSourcesChange(next);
-                  onRequestRebuild?.();
-                }}
-                disabled={disabled}
-              />
-              <EnvelopeMaskToggles
-                mask={envelopeMask}
-                onChange={onEnvelopeMaskChange}
-                trafficSource={trafficSource ?? null}
-                allowEmpty
-                disabled={disabled}
-              />
+              {/* 1. Sources & composition — carte unique regroupant routeurs, mask enveloppe, Vmin/Vmax */}
               <div className="rounded-md border border-slate-200 bg-slate-50/80 p-2.5">
-                <label className="flex cursor-pointer items-start gap-2 text-[11px] font-medium text-slate-700">
+                <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Sources & composition
+                  </h3>
+                  <span className="text-[10px] text-slate-400">
+                    V_env = min(cochées, Vmax)
+                  </span>
+                </div>
+
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  Routeurs V légal
+                </p>
+                <div className="mb-2">
+                  <RouterSpeedToggles
+                    rows={speedSourceRows}
+                    selected={speedSources}
+                    onChange={(next) => {
+                      onSpeedSourcesChange(next);
+                      onRequestRebuild?.();
+                    }}
+                    disabled={disabled}
+                  />
+                </div>
+
+                <p className="mb-1 mt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  Composantes cochées dans le min
+                </p>
+                <EnvelopeMaskToggles
+                  mask={envelopeMask}
+                  onChange={onEnvelopeMaskChange}
+                  trafficSource={trafficSource ?? null}
+                  hideTrafficSource
+                  compact
+                  allowEmpty
+                  disabled={disabled}
+                />
+
+                <label className="mt-2 flex cursor-pointer items-start gap-2 border-t border-slate-200/70 pt-2 text-[11px] font-medium text-slate-700">
                   <input
                     type="checkbox"
                     className="mt-0.5 h-3.5 w-3.5 accent-brand"
@@ -222,7 +290,16 @@ export default function ConstraintWorkspace(props: ConstraintWorkspaceProps) {
                     </span>
                   </span>
                 </label>
+
+                <p className="mt-2 text-[10px] leading-snug text-slate-500">
+                  Vmax véhicule se règle dans{" "}
+                  <span className="font-semibold text-slate-700">
+                    Comportement
+                  </span>{" "}
+                  (domaine temporel).
+                </p>
               </div>
+
               <SpatialFilterControls
                 mode={legalSmoothMode}
                 onModeChange={(m) => {
@@ -292,15 +369,23 @@ export default function ConstraintWorkspace(props: ConstraintWorkspaceProps) {
       {(tab === "slope" || tab === "both") && (
         <SectionCard
           title="Pente"
-          subtitle={`combine sources · L = ${trapLengthM.toFixed(0)} m`}
+          subtitle={`unité ${slopeUnit ? slopeUnitLabel(slopeUnit) : "%"} · combine sources · L = ${trapLengthM.toFixed(0)} m`}
           focusHint={
-            <div className="flex gap-1.5">
-              <ChartFocusButton chartId="workspace.slope">
-                α(s)
-              </ChartFocusButton>
-              <ChartFocusButton chartId="workspace.slope.km">
-                Bandes 1 km
-              </ChartFocusButton>
+            <div className="flex items-center gap-2">
+              {onSlopeUnitChange && slopeUnit && (
+                <SlopeUnitToggle
+                  value={slopeUnit}
+                  onChange={onSlopeUnitChange}
+                />
+              )}
+              <div className="flex gap-1.5">
+                <ChartFocusButton chartId="workspace.slope">
+                  α(s)
+                </ChartFocusButton>
+                <ChartFocusButton chartId="workspace.slope.km">
+                  Bandes 1 km
+                </ChartFocusButton>
+              </div>
             </div>
           }
         >
@@ -436,6 +521,17 @@ function TabBar({
         </button>
       ))}
     </div>
+  );
+}
+
+function RecapChip({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
+      <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+        {label}
+      </span>
+      <span className="text-[11px] font-medium text-slate-800">{value}</span>
+    </span>
   );
 }
 

@@ -8,8 +8,12 @@ type EnvelopeMaskTogglesProps = {
   disabled?: boolean;
   /** Optional traffic_source badge hint (HERE/Mapbox/OSRM). */
   trafficSource?: string | null;
+  /** Suppress the trafficSource badge (already shown in the workspace récap). */
+  hideTrafficSource?: boolean;
   /** Allow all sources off (Vmax alone still binds via remask). Default true. */
   allowEmpty?: boolean;
+  /** Hide the section title (when embedded in a parent card). */
+  compact?: boolean;
 };
 
 const OPTIONS: {
@@ -43,22 +47,30 @@ export default function EnvelopeMaskToggles({
   onChange,
   disabled = false,
   trafficSource = null,
+  hideTrafficSource = false,
   allowEmpty = true,
+  compact = false,
 }: EnvelopeMaskTogglesProps) {
   const active =
     (mask.legal ? 1 : 0) + (mask.traffic ? 1 : 0) + (mask.curve ? 1 : 0);
 
+  const containerClass = compact
+    ? "flex flex-col gap-1.5"
+    : "rounded-md border border-slate-200 bg-slate-50/80 p-2.5";
+
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50/80 p-2.5">
-      <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Sources de l’enveloppe
-        </h3>
-        <span className="text-[10px] text-slate-400">
-          V_lim = min(cochées{allowEmpty ? ", Vmax" : ""})
-        </span>
-      </div>
-      {trafficSource ? (
+    <div className={containerClass}>
+      {!compact && (
+        <div className="mb-1.5 flex items-baseline justify-between gap-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Composition de l’enveloppe
+          </h3>
+          <span className="text-[10px] text-slate-400">
+            V_env = min(cochées{allowEmpty ? ", Vmax" : ""})
+          </span>
+        </div>
+      )}
+      {trafficSource && !hideTrafficSource ? (
         <p className="mb-2 text-[10px] text-slate-500">
           Routeur actif :{" "}
           <span className="font-semibold text-slate-700">{trafficSource}</span>
@@ -102,13 +114,15 @@ export default function EnvelopeMaskToggles({
           );
         })}
       </div>
-      <p className="mt-2 text-[10px] leading-snug text-slate-500">
-        Toutes les combinaisons sont autorisées
-        {allowEmpty
-          ? " (aucune source → seule la Vmax véhicule borne l’enveloppe)."
-          : "."}{" "}
-        Impact immédiat sur les graphiques ci-dessous.
-      </p>
+      {!compact && (
+        <p className="mt-2 text-[10px] leading-snug text-slate-500">
+          Toutes les combinaisons sont autorisées
+          {allowEmpty
+            ? " (aucune source → seule la Vmax véhicule borne l’enveloppe)."
+            : "."}{" "}
+          Impact immédiat sur les graphiques ci-dessous.
+        </p>
+      )}
     </div>
   );
 }
