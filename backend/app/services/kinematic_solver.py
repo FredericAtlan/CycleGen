@@ -783,9 +783,24 @@ class IDMSolver:
             # P1 — dynamic grade coupling: −g·sin(α(s))
             #   α > 0  (climb)   → subtract (car naturally slows)
             #   α < 0  (descent) → add     (car naturally speeds up)
+            # Plus P1b — climb feed-forward: a real driver actively pushes
+            # the pedal to cancel gravity when going uphill (AVL CRUISE
+            # standard). Modeled as
+            #   a_dyn = a_idm + a_grade + max(0, -a_grade)
+            #         = a_idm                   (climbs, gravity cancelled)
+            #         = a_idm + a_grade         (flat & descents, unchanged)
+            # Without this, an Eco driver (a_max=0.6 m/s²) collapses to a
+            # crawl above ~6 % grade because a_idm ≤ +0.6 but −g·sin(7.4°)
+            # ≈ −0.72 → a_dyn ≡ −0.12. See tests/test_climb_holds_speed.py.
+            # The comfort ceiling on the *apparent* accel below (a_max)
+            # still bounds what the passenger feels; the wheel torque
+            # implicitly needed to deliver it is assumed available (option A
+            # — no explicit vehicle-power cap; option B would add
+            # a_wheel ≤ P_nom / (m·v) using vehicle params).
             alpha_s = _interp(s, S, alpha) if alpha else 0.0
             a_grade = -G_EARTH * math.sin(alpha_s)
-            a_dyn = a_idm + a_grade
+            grade_ff = max(0.0, -a_grade)  # >0 in climbs, 0 otherwise
+            a_dyn = a_idm + a_grade + grade_ff
 
             # P2 — MPC-lite preview braking (curve + descent lookahead).
             # Runs on top of the T_h leader scan: the preview horizon
@@ -823,6 +838,10 @@ class IDMSolver:
                 )
 
             # AVL / BCB mechanical clamps: a ∈ [-b_comf, a_max], then asymmetric jerk.
+            # `a_max` bounds the *apparent* accel felt by passengers; the
+            # climb feed-forward already grants the driver the wheel torque
+            # needed to compensate gravity (see P1b above), so the clamp
+            # keeps its historical semantics here.
             a_min = -params.b_comf
             a_max = params.a_max
             raw = a_dyn + a_noise
