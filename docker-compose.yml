@@ -15,9 +15,10 @@ services:
     # keeps a SUMO-capable image warm with shared tools (netconvert, sumo).
     command: ["sleep", "infinity"]
     healthcheck:
-      test: ["CMD", "which", "sumo"]
+      # Prefer mounted script; falls back to which sumo if volume unavailable
+      test: ["CMD-SHELL", "bash /sumo/scripts/healthcheck.sh || which sumo"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
 
   api:

@@ -1,0 +1,58 @@
+{
+  "generated_at": "2026-09-15T21:05:35.345005+00:00",
+  "reference_id": "avl_n90_bcb",
+  "corridor_id": "test-corridor",
+  "n_arms": 2,
+  "best_arm_id": "a2.40_b2.00_T1.50_Th4.0_s02.0_jm1.5_jb3.0_sf1.05",
+  "recommended": {
+    "driver_profile": "Normal",
+    "speed_factor": 1.05,
+    "a_max": 2.4,
+    "b_comf": 2.0,
+    "T": 1.5,
+    "T_h": 4.0,
+    "s0": 2.0,
+    "jerk_max": 1.5,
+    "jerk_brake_max": 3.0
+  },
+  "arms": [
+    {
+      "id": "a2.40_b2.00_T1.50_Th4.0_s02.0_jm1.5_jb3.0_sf1.05",
+      "driver_profile": "Normal",
+      "speed_factor": 1.05,
+      "a_max": 2.4,
+      "b_comf": 2.0,
+      "T": 1.5,
+      "T_h": 4.0,
+      "s0": 2.0,
+      "jerk_max": 1.5,
+      "jerk_brake_max": 3.0,
+      "rmse_v": 15.104730282215995,
+      "rmse_a": 0.4630492971807215,
+      "delta_duration_s": -1911.0,
+      "delta_duration_pct": -74.73601877199843,
+      "delta_distance_m": -53482.34908,
+      "p95_abs_jerk": 0.6,
+      "score": 22.935808972698755
+    },
+    {
+      "id": "a1.60_b2.00_T1.50_Th4.0_s02.0_jm1.5_jb3.0_sf1.05",
+      "driver_profile": "Normal",
+      "speed_factor": 1.05,
+      "a_max": 1.6,
+      "b_comf": 2.0,
+      "T": 1.5,
+      "T_h": 4.0,
+      "s0": 2.0,
+      "jerk_max": 1.5,
+      "jerk_brake_max": 3.0,
+      "rmse_v": 15.097229012733756,
+      "rmse_a": 0.46701553199020257,
+      "delta_duration_s": -1910.0,
+      "delta_duration_pct": -74.69691044192413,
+      "delta_distance_m": -53482.34908,
+      "p95_abs_jerk": 0.6,
+      "score": 22.941043976048498
+    }
+  ]
+}

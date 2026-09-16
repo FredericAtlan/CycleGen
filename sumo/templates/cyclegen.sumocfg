@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Stub SUMO config — filled by prepare_network / sumo_bridge -->
+<!-- CycleGen SUMO config — copied into work dir by prepare_network.py -->
 <configuration>
     <input>
         <net-file value="network.net.xml"/>
         <route-files value="routes.rou.xml"/>
+        <additional-files value="vtypes.add.xml"/>
     </input>
     <time>
         <begin value="0"/>

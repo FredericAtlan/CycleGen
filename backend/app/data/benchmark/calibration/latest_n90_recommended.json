@@ -1,0 +1,234 @@
+{
+  "generated_at": "2026-09-15T22:32:55.978957+00:00",
+  "reference_id": "avl_n90_bcb",
+  "driver_profile": "Normal",
+  "a_y_mps2": 3.5,
+  "n_arms": 34,
+  "mode": "fast_micro",
+  "physics": {
+    "a_max": 2.0,
+    "b_comf": 1.2,
+    "T": 1.4,
+    "T_h": 4.1,
+    "s0": 2.5,
+    "jerk_max": 1.5,
+    "jerk_brake_max": 2.5,
+    "speed_factor": 1.0
+  },
+  "metrics": {
+    "rmse_v": 2.0174148839351584,
+    "rmse_v_kmh": 7.262693582166571,
+    "rmse_a": 0.6714618810803317,
+    "delta_duration_pct": -0.6257332811888932,
+    "delta_duration_s": -16.0,
+    "bias_v_mps": 0.0651286603859381,
+    "mean_v_kmh": 77.188688188902,
+    "max_v_kmh": 111.15320373184358,
+    "p95_abs_jerk": 1.660458598285755,
+    "score": 4.753321070751596
+  },
+  "arm_id": "a2.000_b1.200_T1.400_Th4.10_s02.50_jm1.50_jb2.50_sf1.000",
+  "note": "micro_seed",
+  "targets": {
+    "rmse_v": 2.5,
+    "rmse_a": 0.25,
+    "abs_delta_T_pct": 3.0
+  },
+  "targets_met": {
+    "rmse_v": true,
+    "rmse_a": false,
+    "delta_T": true
+  },
+  "bcb_baseline": {
+    "a_max": 2.58,
+    "b_comf": 1.71,
+    "T": 1.4,
+    "T_h": 4.0,
+    "s0": 2.5,
+    "jerk_max": 0.96,
+    "jerk_brake_max": 2.93,
+    "speed_factor": 1.05
+  },
+  "top10": [
+    {
+      "rank": 1,
+      "note": "micro_seed",
+      "physics": {
+        "a_max": 2.0,
+        "b_comf": 1.2,
+        "T": 1.4,
+        "T_h": 4.1,
+        "s0": 2.5,
+        "jerk_max": 1.5,
+        "jerk_brake_max": 2.5,
+        "speed_factor": 1.0
+      },
+      "rmse_v": 2.0174148839351584,
+      "rmse_a": 0.6714618810803317,
+      "delta_duration_pct": -0.6257332811888932,
+      "score": 4.753321070751596
+    },
+    {
+      "rank": 2,
+      "note": "micro_seed",
+      "physics": {
+        "a_max": 1.85,
+        "b_comf": 1.2,
+        "T": 1.4,
+        "T_h": 4.1,
+        "s0": 2.5,
+        "jerk_max": 1.5,
+        "jerk_brake_max": 2.5,
+        "speed_factor": 1.0
+      },
+      "rmse_v": 2.0417696422106544,
+      "rmse_a": 0.6688970148268282,
+      "delta_duration_pct": -0.5084082909659757,
+      "score": 4.758030364795245
+    },
+    {
+      "rank": 3,
+      "note": "micro_seed",
+      "physics": {
+        "a_max": 2.15,
+        "b_comf": 1.2,
+        "T": 1.4,
+        "T_h": 4.1,
+        "s0": 2.5,
+        "jerk_max": 1.5,
+        "jerk_brake_max": 2.5,
+        "speed_factor": 1.0
+      },
+      "rmse_v": 2.018500685887088,
+      "rmse_a": 0.6768357561491685,
+      "delta_duration_pct": -0.6257332811888932,
+      "score": 4.775902372978873
+    },
+    {
+      "rank": 4,
+      "note": "micro_seed",
+      "physics": {
+        "a_max": 1.85,
+        "b_comf": 1.35,
+        "T": 1.4,
+        "T_h": 4.1,
+        "s0": 2.5,
+        "jerk_max": 1.5,
+        "jerk_brake_max": 2.5,
+        "speed_factor": 1.0
+      },
+      "rmse_v": 2.1659153396753954,
+      "rmse_a": 0.695315732744927,
+      "delta_duration_pct": -0.11732499022291748,
+      "score": 4.956564269872937
+    },
+    {
+      "rank": 5,
+      "note": "seed_from_long_search",
+      "physics": {
+        "a_max": 2.0,
+        "b_comf": 1.35,
+        "T": 1.4,
+        "T_h": 4.1,
+        "s0": 2.5,
+        "jerk_max": 1.5,
+        "jerk_brake_max": 2.5,
+        "speed_factor": 1.0
+      },
+      "rmse_v": 2.152552033425048,
+      "rmse_a": 0.7065223265916062,
+      "delta_duration_pct": -0.19554165037152915,
+      "score": 4.9942846718211955
+    },
+    {
+      "rank": 6,
+      "note": "micro_seed",
+      "physics": {
+        "a_max": 2.15,
+        "b_comf": 1.35,
+        "T": 1.4,
+        "T_h": 4.1,
+        "s0": 2.5,
+        "jerk_max": 1.5,
+        "jerk_brake_max": 2.5,
+        "speed_factor": 1.0
+      },
+      "rmse_v": 2.116132675221777,
+      "rmse_a": 0.7177389877534688,
+      "delta_duration_pct": -0.27375831052014077,
+      "score": 5.008989291077263
+    },
+    {
+      "rank": 7,
+      "note": "seed_T16",
+      "physics": {
+        "a_max": 2.0,
+        "b_comf": 1.35,
+        "T": 1.6,
+        "T_h": 4.1,
+        "s0": 2.5,
+        "jerk_max": 1.5,
+        "jerk_brake_max": 2.5,
+        "speed_factor": 1.0
+      },
+      "rmse_v": 2.1616170941208814,
+      "rmse_a": 0.7099066749387706,
+      "delta_duration_pct": -0.1564333202972233,
+      "score": 5.0137584594997415
+    },
+    {
+      "rank": 8,
+      "note": "seed_T12",
+      "physics": {
+        "a_max": 2.0,
+        "b_comf": 1.35,
+        "T": 1.2,
+        "T_h": 4.1,
+        "s0": 2.5,
+        "jerk_max": 1.5,
+        "jerk_brake_max": 2.5,
+        "speed_factor": 1.0
+      },
+      "rmse_v": 2.1592936665852562,
+      "rmse_a": 0.7117731758520418,
+      "delta_duration_pct": -0.19554165037152915,
+      "score": 5.022029702023146
+    },
+    {
+      "rank": 9,
+      "note": "seed_bcb_jerk",
+      "physics": {
+        "a_max": 2.0,
+        "b_comf": 1.35,
+        "T": 1.4,
+        "T_h": 4.1,
+        "s0": 2.5,
+        "jerk_max": 0.96,
+        "jerk_brake_max": 2.93,
+        "speed_factor": 1.0
+      },
+      "rmse_v": 2.3420504816372603,
+      "rmse_a": 0.6830746916309012,
+      "delta_duration_pct": 0.4301916308173641,
+      "score": 5.108764578626254
+    },
+    {
+      "rank": 10,
+      "note": "refine_log_best2",
+      "physics": {
+        "a_max": 1.85,
+        "b_comf": 1.5,
+        "T": 1.4,
+        "T_h": 4.5,
+        "s0": 2.5,
+        "jerk_max": 1.5,
+        "jerk_brake_max": 2.5,
+        "speed_factor": 1.0
+      },
+      "rmse_v": 2.2868023021899937,
+      "rmse_a": 0.7247668075369558,
+      "delta_duration_pct": 0.23464998044583496,
+      "score": 5.2046415307734835
+    }
+  ]
+}

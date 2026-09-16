@@ -1,0 +1,8 @@
+{
+  "mode": "offline_synth_homologation",
+  "note": "Awaiting HERE_API_KEY for live HERE geometry",
+  "n_rows": 2542,
+  "duration_s": 2541.0,
+  "enable_markov": false,
+  "global_max_speed_kmh": 130
+}

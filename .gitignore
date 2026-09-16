@@ -36,3 +36,9 @@ sumo/work/
 tmp/
 *.csv
 !frontend/public/**
+!backend/app/data/benchmark/**/*.csv
+!backend/app/data/benchmark/**/*.json
+!backend/app/data/benchmark/**/*.md
+
+# Large upstream datasets (VED raw / extracted)
+backend/app/data/benchmark_sources/

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Stub routes for CycleGen. Edge list is filled by prepare_network / TraCI bridge. -->
+<routes>
+    <!-- Placeholder route: replace edges with a real path through network.net.xml -->
+    <route id="ego_route" edges=""/>
+
+    <!-- Ego vehicle templates — pick one type (Eco | Normal | Agressif) via TraCI or rewrite. -->
+    <!-- Default depart uses Normal; Eco / Agressif kept as commented alternatives for Agent F. -->
+    <vehicle id="ego" type="Normal" route="ego_route" depart="0" departLane="best" departSpeed="max"/>
+    <!-- <vehicle id="ego" type="Eco" route="ego_route" depart="0" departLane="best" departSpeed="max"/> -->
+    <!-- <vehicle id="ego" type="Agressif" route="ego_route" depart="0" departLane="best" departSpeed="max"/> -->
+</routes>

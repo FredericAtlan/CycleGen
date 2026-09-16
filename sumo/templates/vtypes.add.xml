@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    CycleGen driving-style vTypes for SUMO (referenced via additional-files).
+
+    P5 — Aligned with IDM `PROFILE_PARAMS` in backend/app/services/kinematic_solver.py
+    (a_max, b_comf, T, s0, jerk) so SUMO output is interchangeable with the
+    pure-Python IDMSolver. speedFactor also matches UI_DRIVER_PRESETS in
+    frontend/src/lib/driverPresets.ts (Eco 0.95, Normal 1.05, Aggressif 1.12,
+    Sportif 1.10). carFollowModel forced to IDM so the plant matches CycleGen.
+-->
+<additional>
+    <!-- Eco — comfort driver, low a_max/b_comf, longer headway. -->
+    <vType id="Eco"
+           vClass="passenger"
+           carFollowModel="IDM"
+           accel="1.2"
+           decel="1.2"
+           emergencyDecel="4.5"
+           sigma="0.15"
+           tau="2.0"
+           length="4.5"
+           minGap="3.0"
+           maxSpeed="50"
+           speedFactor="0.95"
+           speedDev="0.05"
+           impatience="0.0"
+           jmInit="1"
+           actionStepLength="1.0">
+        <param key="idm.T"       value="2.0"/>
+        <param key="idm.s0"      value="3.0"/>
+        <param key="idm.delta"   value="4.0"/>
+        <param key="jerk.accel"  value="0.5"/>
+        <param key="jerk.brake"  value="1.5"/>
+    </vType>
+
+    <!-- Normal — balanced default ego (BCB baseline). -->
+    <vType id="Normal"
+           vClass="passenger"
+           carFollowModel="IDM"
+           accel="2.0"
+           decel="2.0"
+           emergencyDecel="7.0"
+           sigma="0.3"
+           tau="1.5"
+           length="4.5"
+           minGap="2.0"
+           maxSpeed="55"
+           speedFactor="1.05"
+           speedDev="0.08"
+           impatience="0.3"
+           actionStepLength="1.0">
+        <param key="idm.T"       value="1.5"/>
+        <param key="idm.s0"      value="2.0"/>
+        <param key="idm.delta"   value="4.0"/>
+        <param key="jerk.accel"  value="1.5"/>
+        <param key="jerk.brake"  value="3.0"/>
+    </vType>
+
+    <!-- Aggressive — snappy, high a_max/b_comf, short headway. -->
+    <vType id="Agressif"
+           vClass="passenger"
+           carFollowModel="IDM"
+           accel="3.2"
+           decel="3.2"
+           emergencyDecel="8.5"
+           sigma="0.5"
+           tau="1.1"
+           length="4.5"
+           minGap="1.6"
+           maxSpeed="60"
+           speedFactor="1.12"
+           speedDev="0.10"
+           impatience="0.7"
+           actionStepLength="1.0">
+        <param key="idm.T"       value="1.1"/>
+        <param key="idm.s0"      value="1.6"/>
+        <param key="idm.delta"   value="4.0"/>
+        <param key="jerk.accel"  value="2.5"/>
+        <param key="jerk.brake"  value="4.0"/>
+    </vType>
+
+    <!-- Sportif — very snappy, closest headway. -->
+    <vType id="Sportif"
+           vClass="passenger"
+           carFollowModel="IDM"
+           accel="3.5"
+           decel="3.5"
+           emergencyDecel="9.5"
+           sigma="0.55"
+           tau="1.0"
+           length="4.5"
+           minGap="1.5"
+           maxSpeed="65"
+           speedFactor="1.10"
+           speedDev="0.12"
+           impatience="0.8"
+           actionStepLength="1.0">
+        <param key="idm.T"       value="1.0"/>
+        <param key="idm.s0"      value="1.5"/>
+        <param key="idm.delta"   value="4.0"/>
+        <param key="jerk.accel"  value="3.0"/>
+        <param key="jerk.brake"  value="5.0"/>
+    </vType>
+</additional>

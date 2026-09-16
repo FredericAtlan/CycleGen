@@ -3,6 +3,18 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+# Load repo / backend .env before routing modules read MAPBOX_ACCESS_TOKEN.
+try:
+    from dotenv import load_dotenv
+
+    _backend_dir = Path(__file__).resolve().parents[1]
+    _repo_root = _backend_dir.parent
+    load_dotenv(_repo_root / ".env")
+    load_dotenv(_backend_dir / ".env", override=True)
+except ImportError:
+    pass
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,13 +27,25 @@ app = FastAPI(
 
 _origins = [
     o.strip()
-    for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+    for o in os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001",
+    ).split(",")
     if o.strip()
 ]
+# Never fall back to "*" with credentials — empty env ⇒ localhost only.
+if not _origins:
+    _origins = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+    ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_origins or ["*"],
+    allow_origins=_origins,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -59,5 +83,26 @@ try:
     from app.api.routes_export import router as export_router
 
     app.include_router(export_router, prefix="/api")
+except ImportError:
+    pass
+
+try:
+    from app.api.routes_benchmark import router as benchmark_router
+
+    app.include_router(benchmark_router, prefix="/api")
+except ImportError:
+    pass
+
+try:
+    from app.api.routes_scenario import router as scenario_router
+
+    app.include_router(scenario_router, prefix="/api")
+except ImportError:
+    pass
+
+try:
+    from app.api.routes_calibrate import router as calibrate_router
+
+    app.include_router(calibrate_router, prefix="/api")
 except ImportError:
     pass
