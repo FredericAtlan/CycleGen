@@ -4,10 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   CycleGenWarning,
   DriverProfile,
+  ElevationSourceKey,
+  RouterKey,
   RoutingProfile,
   SimEngine,
   SpatialCorridor,
 } from "@/lib/types";
+import { ROUTER_LABELS, ROUTER_TO_PROFILE } from "@/lib/types";
 import type { DriverPhysics } from "@/lib/driverPresets";
 import type { WaypointDraft } from "@/lib/types";
 import type { EnvelopeMask } from "@/lib/corridorEdit";
@@ -102,6 +105,13 @@ type SidebarProps = {
   geocodingWaypointId: string | null;
   routingProfile: RoutingProfile | string;
   onRoutingProfileChange: (value: string) => void;
+  /** Multi-router selection (Trajet). If empty, fallback to routingProfile. */
+  routingProfiles?: RoutingProfile[];
+  onRoutingProfilesChange?: (next: RoutingProfile[]) => void;
+  /** Availability hints for router checkboxes (env keys). */
+  routerAvailability?: Partial<Record<RouterKey, boolean>>;
+  /** Status per router after last analyze ('ok' | 'skipped:no_key' | 'error:...'). */
+  routerStatus?: Partial<Record<RouterKey, string>>;
   departAt: string;
   onDepartAtChange: (value: string) => void;
   aY: number;
@@ -237,6 +247,10 @@ export default function Sidebar({
   geocodingWaypointId,
   routingProfile,
   onRoutingProfileChange,
+  routingProfiles = [],
+  onRoutingProfilesChange,
+  routerAvailability,
+  routerStatus,
   departAt,
   onDepartAtChange,
   aY,
@@ -587,22 +601,85 @@ export default function Sidebar({
                   </div>
                 )}
 
-                <label className="block space-y-1">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700">
-                    <RouterIcon className="h-3.5 w-3.5 text-slate-500" />
-                    Routeur
-                  </span>
-                  <select
-                    value={routingProfile}
-                    onChange={(e) => onRoutingProfileChange(e.target.value)}
-                    disabled={paramsDisabled}
-                    className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand focus:ring-1 focus:ring-brand disabled:opacity-60"
-                  >
-                    <option value="HERE/ADAS">HERE / ADAS</option>
-                    <option value="Mapbox/Traffic">Mapbox / Traffic</option>
-                    <option value="Car/OSRM">Voiture / OSRM</option>
-                  </select>
-                </label>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700">
+                      <RouterIcon className="h-3.5 w-3.5 text-slate-500" />
+                      Routeurs (multi)
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      1er = géométrie primaire
+                    </span>
+                  </div>
+                  <ul className="flex flex-col gap-1 rounded-md border border-slate-200 bg-slate-50/80 p-2">
+                    {(["here", "mapbox", "osrm"] as RouterKey[]).map(
+                      (key) => {
+                        const profile = ROUTER_TO_PROFILE[key];
+                        const rawStatus = routerStatus?.[key];
+                        const configuredKnown =
+                          routerAvailability?.[key] !== undefined;
+                        const configured = configuredKnown
+                          ? routerAvailability?.[key] === true
+                          : true;
+                        const checked = onRoutingProfilesChange
+                          ? routingProfiles.includes(profile)
+                          : routingProfile === profile;
+                        const badge = rawStatus
+                          ? rawStatus === "ok"
+                            ? { label: "OK", cls: "bg-emerald-500/10 text-emerald-700" }
+                            : rawStatus.startsWith("skipped")
+                              ? { label: "clé absente", cls: "bg-amber-500/10 text-amber-700" }
+                              : rawStatus.startsWith("error")
+                                ? { label: "erreur", cls: "bg-rose-500/10 text-rose-700" }
+                                : { label: rawStatus, cls: "bg-slate-400/10 text-slate-500" }
+                          : configuredKnown && !configured
+                            ? { label: "clé absente", cls: "bg-amber-500/10 text-amber-700" }
+                            : null;
+                        return (
+                          <li
+                            key={key}
+                            className="flex items-center justify-between"
+                          >
+                            <label
+                              className={`inline-flex items-center gap-2 text-[11px] font-medium text-slate-700 ${paramsDisabled || !configured ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+                            >
+                              <input
+                                type="checkbox"
+                                className="h-3.5 w-3.5 accent-brand"
+                                checked={checked}
+                                disabled={paramsDisabled || !configured}
+                                onChange={(e) => {
+                                  if (onRoutingProfilesChange) {
+                                    const next = new Set(routingProfiles);
+                                    if (e.target.checked) next.add(profile);
+                                    else next.delete(profile);
+                                    onRoutingProfilesChange(Array.from(next));
+                                  }
+                                  // Backward compat: keep singular in sync w/ first checked.
+                                  onRoutingProfileChange(profile);
+                                }}
+                              />
+                              <span>{ROUTER_LABELS[key]}</span>
+                            </label>
+                            {badge && (
+                              <span
+                                title={rawStatus ?? undefined}
+                                className={`ml-2 inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${badge.cls}`}
+                              >
+                                {badge.label}
+                              </span>
+                            )}
+                          </li>
+                        );
+                      }
+                    )}
+                  </ul>
+                  <p className="text-[10px] leading-snug text-slate-500">
+                    Le 1er coché fournit la géométrie ; les suivants sont
+                    projetés (nearest-S) et alimentent les sources cochables
+                    de l’étape Contraintes.
+                  </p>
+                </div>
 
                 {onApplyHomologationPreset && (
                   <button
@@ -643,86 +720,14 @@ export default function Sidebar({
               </div>
             </AccordionSection>
 
-            {envelopeMask && onEnvelopeMaskChange ? (
-              <AccordionSection
-                title="Mode de conduite"
-                summary={`${
-                  envelopeMask.legal ? "Limites ON" : "Limites OFF"
-                } · Vmax ${maxSpeedKmh ?? "—"} · Markov ${
-                  enableMarkov ? "ON" : "OFF"
-                }`}
-                defaultOpen
-              >
-                <div className="space-y-3">
-                  <label className="flex items-center justify-between gap-3 text-xs font-medium text-slate-700">
-                    <span>Respecter les limites de vitesse</span>
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-brand"
-                      checked={envelopeMask.legal}
-                      disabled={paramsDisabled}
-                      onChange={(e) =>
-                        onEnvelopeMaskChange({
-                          ...envelopeMask,
-                          legal: e.target.checked,
-                        })
-                      }
-                    />
-                  </label>
-                  <label className="block space-y-1">
-                    <span className="text-xs font-medium text-slate-700">
-                      Vitesse Max Véhicule (km/h)
-                    </span>
-                    <input
-                      type="number"
-                      min={30}
-                      max={300}
-                      step={5}
-                      value={maxSpeedKmh ?? 130}
-                      disabled={paramsDisabled}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        onMaxSpeedKmhChange(
-                          Number.isFinite(v) ? Math.max(30, v) : 130
-                        );
-                      }}
-                      className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand focus:ring-1 focus:ring-brand disabled:opacity-60"
-                    />
-                  </label>
-                  <label className="flex items-center justify-between gap-3 text-xs font-medium text-slate-700">
-                    <span>Inclure congestion (V_traffic)</span>
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-brand"
-                      checked={envelopeMask.traffic}
-                      disabled={paramsDisabled}
-                      onChange={(e) =>
-                        onEnvelopeMaskChange({
-                          ...envelopeMask,
-                          traffic: e.target.checked,
-                        })
-                      }
-                    />
-                  </label>
-                  <label className="flex items-center justify-between gap-3 text-xs font-medium text-slate-700">
-                    <span>Bruit stochastique du trafic (Markov)</span>
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-brand"
-                      checked={enableMarkov}
-                      disabled={paramsDisabled || !onEnableMarkovChange}
-                      onChange={(e) =>
-                        onEnableMarkovChange?.(e.target.checked)
-                      }
-                    />
-                  </label>
-                  <p className="text-[10px] leading-snug text-slate-500">
-                    Homologation AVL-like : limites ON, V_traffic OFF, Markov
-                    OFF. Le freinage enveloppe / feux reste actif.
-                  </p>
-                </div>
-              </AccordionSection>
-            ) : null}
+            {/* Mode de conduite migré : Vmax + Markov → Comportement (step 3),
+                Respecter limites + V min/max → Contraintes (step 2). */}
+            <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-snug text-slate-600">
+              Vmax véhicule, virage (a_y) et Markov se règlent dans{" "}
+              <span className="font-semibold">Comportement</span>. Le respect
+              des limites, les sources de vitesse / pente et les V/α min-max
+              se règlent dans <span className="font-semibold">Contraintes</span>.
+            </p>
 
             {(onExportCorridorProfile || onImportCorridorProfile) && (
               <AccordionSection
@@ -1423,6 +1428,72 @@ export default function Sidebar({
 
         {activeStep === 3 && (
           <div className="flex flex-col gap-3">
+            <AccordionSection
+              title="Vmax · Virage · Bruit"
+              summary={`Vmax ${maxSpeedKmh ?? "—"} · a_y ${aY.toFixed(1)} · Markov ${enableMarkov ? "ON" : "OFF"}`}
+              defaultOpen
+            >
+              <div className="space-y-3">
+                <label className="block space-y-1">
+                  <span className="flex items-center justify-between text-xs font-medium text-slate-700">
+                    <span>Vitesse Max Véhicule (km/h)</span>
+                    <span className="text-[10px] font-normal text-slate-500">
+                      remask client
+                    </span>
+                  </span>
+                  <input
+                    type="number"
+                    min={30}
+                    max={300}
+                    step={5}
+                    value={maxSpeedKmh ?? 130}
+                    disabled={paramsDisabled}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      onMaxSpeedKmhChange(
+                        Number.isFinite(v) ? Math.max(30, v) : 130
+                      );
+                    }}
+                    className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand focus:ring-1 focus:ring-brand disabled:opacity-60"
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="flex items-center justify-between text-xs font-medium text-slate-700">
+                    <span>Latéral en virage a_y (m/s²)</span>
+                    <span className="text-[10px] font-normal text-slate-500">
+                      V_curve ∝ √a_y
+                    </span>
+                  </span>
+                  <input
+                    type="range"
+                    min={1.5}
+                    max={6.0}
+                    step={0.1}
+                    value={aY}
+                    disabled={paramsDisabled}
+                    onChange={(e) => onAYChange(Number(e.target.value))}
+                    className="w-full accent-brand"
+                  />
+                  <p className="text-right text-[10px] text-slate-500 tabular-nums">
+                    a_y = {aY.toFixed(1)} m/s²
+                  </p>
+                </label>
+                <label className="flex items-center justify-between gap-3 text-xs font-medium text-slate-700">
+                  <span>Bruit stochastique Markov (IDM)</span>
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-brand"
+                    checked={enableMarkov}
+                    disabled={paramsDisabled || !onEnableMarkovChange}
+                    onChange={(e) => onEnableMarkovChange?.(e.target.checked)}
+                  />
+                </label>
+                <p className="text-[10px] leading-snug text-slate-500">
+                  Homologation (AVL) = Markov OFF, virage max = 3.5 m/s².
+                </p>
+              </div>
+            </AccordionSection>
+
             <AccordionSection
               title="Moteur"
               summary={preferredEngine === "sumo" ? "SUMO" : "IDM (défaut)"}

@@ -1344,6 +1344,75 @@ def _attach_highway_from_structures(
     return out
 
 
+def _combine_speed_series(
+    series: list[list[float]],
+    mode: str,
+) -> list[float]:
+    """Combine multiple aligned V_legal series (m/s) into one.
+
+    Ignores non-positive samples per position (a router that has no info at
+    that vertex must not force the min down to zero).
+    """
+    if not series:
+        return []
+    n = min(len(s) for s in series)
+    out: list[float] = []
+    for i in range(n):
+        vals = [
+            float(s[i]) for s in series
+            if i < len(s) and math.isfinite(float(s[i])) and float(s[i]) > 0.0
+        ]
+        if not vals:
+            out.append(0.0)
+            continue
+        if mode == "min":
+            out.append(min(vals))
+        elif mode == "mean_snap":
+            out.append(sum(vals) / len(vals))
+        elif mode == "majority":
+            bins = [int(round(v * 3.6)) for v in vals]
+            counts: dict[int, int] = {}
+            for b in bins:
+                counts[b] = counts.get(b, 0) + 1
+            best_b = bins[0]
+            best_c = -1
+            for b, c in counts.items():
+                if c > best_c or (c == best_c and b < best_b):
+                    best_c = c
+                    best_b = b
+            out.append(best_b / 3.6)
+        else:
+            out.append(min(vals))
+    return out
+
+
+def _combine_elevation_series(
+    series: list[list[float]],
+    mode: str,
+) -> list[float]:
+    """Combine multiple aligned Z(s) sources (m). Ignores 0.0 (missing DEM)."""
+    if not series:
+        return []
+    n = min(len(s) for s in series)
+    out: list[float] = []
+    for i in range(n):
+        vals = [float(s[i]) for s in series if i < len(s) and math.isfinite(float(s[i]))]
+        # Drop pure 0 (DEM fallback marker) when at least one source is non-zero.
+        non_zero = [v for v in vals if abs(v) > 1e-6]
+        if non_zero:
+            vals = non_zero
+        if not vals:
+            out.append(0.0)
+            continue
+        if mode == "min":
+            out.append(min(vals))
+        elif mode == "max":
+            out.append(max(vals))
+        else:
+            out.append(sum(vals) / len(vals))
+    return out
+
+
 def build_spatial_corridor(
     route: RouteAnalyzeResponse,
     *,
@@ -1362,6 +1431,12 @@ def build_spatial_corridor(
     enable_speed_limits: bool = True,
     global_max_speed_kmh: float = 130.0,
     include_traffic_in_envelope: bool = False,
+    speed_sources: list[str] | None = None,
+    speed_combine: str = "min",
+    elevation_sources: list[str] | None = None,
+    elevation_combine: str = "mean",
+    speed_min_kmh: float | None = None,
+    speed_max_kmh: float | None = None,
 ) -> SpatialCorridor:
     """
     Process RouteAnalyzeResponse into a scientific SpatialCorridor (Vague 1).
@@ -1400,11 +1475,35 @@ def build_spatial_corridor(
         )
 
     S = cumulative_distance_m(geometry, route.segment_distances_m)
-    V_legal = snap_legal_speeds_mps(
-        align_speeds_to_points(n, route.segment_speeds_mps)
-    )
+
+    # ----- Router source selection for V_legal --------------------------------
+    allowed_sources = {
+        str(s).strip().lower()
+        for s in (speed_sources if speed_sources is not None else ["here", "mapbox", "osrm", "osm"])
+    }
+    router_series: dict[str, list[float]] = getattr(
+        route, "segment_speeds_by_router", None
+    ) or {}
+    active_router_legal: list[list[float]] = []
+    for key, series in router_series.items():
+        if key not in allowed_sources:
+            continue
+        if not series or len(series) < n:
+            continue
+        active_router_legal.append([float(v) for v in series[:n]])
+
+    if active_router_legal:
+        V_legal = _combine_speed_series(active_router_legal, mode=speed_combine)
+        V_legal = snap_legal_speeds_mps(V_legal)
+    else:
+        # Fallback to primary router's per-segment speeds (backwards compat).
+        V_legal = snap_legal_speeds_mps(
+            align_speeds_to_points(n, route.segment_speeds_mps)
+        )
     # Overlay OSM posted maxspeed (agglomeration 50 / 70) on free-flow annotation.
     osm_limits = getattr(route, "osm_speed_limits", None) or []
+    if "osm" not in allowed_sources:
+        osm_limits = []  # respect UI toggle
     osm_warnings: list[CycleGenWarning] = []
     osm_overlay_applied = False
     if osm_limits:
@@ -1445,8 +1544,33 @@ def build_spatial_corridor(
     traffic_segs = route.segment_traffic_speeds_mps or route.segment_speeds_mps
     V_traffic = align_speeds_to_points(n, traffic_segs)
 
+    # ----- Elevation source combination ---------------------------------------
+    allowed_elev = {
+        str(s).strip().lower()
+        for s in (
+            elevation_sources
+            if elevation_sources is not None
+            else ["here", "open-meteo", "open-elevation", "opentopodata"]
+        )
+    }
+    elev_by_source: dict[str, list[float]] = getattr(
+        route, "elevations_by_source", None
+    ) or {}
+    active_elev: list[list[float]] = []
+    for key, series in elev_by_source.items():
+        if key.lower() not in allowed_elev:
+            continue
+        if not series or len(series) != n:
+            continue
+        active_elev.append([float(z) for z in series])
+
+    if active_elev:
+        base_elev = _combine_elevation_series(active_elev, mode=elevation_combine)
+    else:
+        base_elev = list(route.elevations_m)
+
     elev_corrected, topo_warnings = prepare_elevations(
-        route.elevations_m,
+        base_elev,
         S,
         geometry,
         route.road_structures or [],
@@ -1511,6 +1635,27 @@ def build_spatial_corridor(
         tau_range_mps=2.0,
     )
     V_envelope = smooth_envelope_spatial(S, V_envelope, window_m=25.0)
+    # Optional user-defined clamps (km/h → m/s).
+    vmax_mps = (
+        float(speed_max_kmh) / 3.6
+        if (speed_max_kmh is not None and float(speed_max_kmh) > 0)
+        else None
+    )
+    vmin_mps = (
+        float(speed_min_kmh) / 3.6
+        if (speed_min_kmh is not None and float(speed_min_kmh) > 0)
+        else None
+    )
+    if vmax_mps is not None or vmin_mps is not None:
+        clamped: list[float] = []
+        for v in V_envelope:
+            vv = float(v)
+            if vmax_mps is not None and vv > vmax_mps:
+                vv = vmax_mps
+            if vmin_mps is not None and vv < vmin_mps:
+                vv = vmin_mps
+            clamped.append(vv)
+        V_envelope = clamped
     V_limite = list(V_envelope)
 
     feux, signal_warnings = project_signals_strict(

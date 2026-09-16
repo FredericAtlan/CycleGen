@@ -66,7 +66,21 @@ class RouteAnalyzeRequest(BaseModel):
         max_length=20,
         description="Intermediate stops (max 20), each with optional stop_duration_s",
     )
-    routing_profile: RoutingProfile = RoutingProfile.MAPBOX_TRAFFIC
+    routing_profile: RoutingProfile | None = Field(
+        default=None,
+        description=(
+            "DEPRECATED single-router selector. Prefer `routing_profiles` "
+            "(multi). Kept for backwards compat: normalized into a 1-element list."
+        ),
+    )
+    routing_profiles: list[RoutingProfile] = Field(
+        default_factory=list,
+        description=(
+            "Ordered list of routers to call in parallel. The first element "
+            "dictates the primary geometry (S-axis); others are projected "
+            "onto it via nearest-S. Empty = auto-detect configured routers."
+        ),
+    )
     depart_at: datetime = Field(
         ...,
         description="Departure timestamp (required for traffic envelope; local or UTC).",
@@ -183,6 +197,42 @@ class RouteAnalyzeResponse(BaseModel):
         default=None,
         description="DEM provider tag: here | open-meteo | open-elevation | …",
     )
+    routers_used: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Ordered list of routers that actually contributed data (first = "
+            "primary geometry). Excludes routers that failed or were skipped."
+        ),
+    )
+    segment_speeds_by_router: dict[str, list[float]] = Field(
+        default_factory=dict,
+        description=(
+            "V_legal per router aligned on the primary S-axis (m/s per vertex). "
+            "Keys: 'here' | 'mapbox' | 'osrm'. Missing / failed routers omit "
+            "their entry."
+        ),
+    )
+    segment_traffic_speeds_by_router: dict[str, list[float]] = Field(
+        default_factory=dict,
+        description=(
+            "V_traffic per router aligned on the primary S-axis (m/s per vertex). "
+            "For HERE/OSRM this typically mirrors the legal speed (free-flow)."
+        ),
+    )
+    elevations_by_source: dict[str, list[float]] = Field(
+        default_factory=dict,
+        description=(
+            "Per-source elevation vector aligned on the primary S-axis (m per "
+            "vertex). Keys: 'here' | 'open-meteo' | 'open-elevation' | "
+            "'opentopodata'."
+        ),
+    )
+    router_status: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Per-router outcome tag: 'ok' | 'skipped:no_key' | 'error:<msg>'."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -287,6 +337,46 @@ class CorridorBuildRequest(BaseModel):
     include_traffic_in_envelope: bool = Field(
         False,
         description="If True, V_traffic (congestion) enters V_cible. Homologation = False.",
+    )
+    speed_sources: list[str] = Field(
+        default_factory=lambda: ["here", "mapbox", "osrm", "osm"],
+        description=(
+            "Which V_legal sources to combine into the working legal envelope. "
+            "Options: 'here', 'mapbox', 'osrm', 'osm'. Ignored keys are dropped."
+        ),
+    )
+    speed_combine: Literal["min", "mean_snap", "majority"] = Field(
+        "min",
+        description=(
+            "How to combine per-router V_legal series before the spatial "
+            "filter. 'min' is the safest (respects the most binding source)."
+        ),
+    )
+    elevation_sources: list[str] = Field(
+        default_factory=lambda: ["here", "open-meteo", "open-elevation", "opentopodata"],
+        description=(
+            "Which Z sources feed the corridor elevation vector. If several "
+            "are available they are combined via `elevation_combine`."
+        ),
+    )
+    elevation_combine: Literal["mean", "min", "max"] = Field(
+        "mean",
+        description="Aggregation across enabled elevation sources.",
+    )
+    speed_min_kmh: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=300.0,
+        description="Optional hard floor on V_envelope (km/h). None = no floor.",
+    )
+    speed_max_kmh: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=300.0,
+        description=(
+            "Optional hard ceiling on V_envelope (km/h). Distinct from the "
+            "physical vehicle Vmax (see `global_max_speed_kmh`)."
+        ),
     )
 
 

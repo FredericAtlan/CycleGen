@@ -10,11 +10,17 @@
 │  1. Départ (A)  — adresse / GPS / clic carte                 │
 │  2. Arrivée (B) — idem                                       │
 │  3. Waypoints   — points intermédiaires optionnels           │
-│  4. Profil route — Mapbox/Traffic  ou  Car/OSRM              │
+│  4. Routeurs (multi, cases à cocher)                         │
+│       ☑ HERE / ADAS         (maxSpeed + Z 3D — 1er = géom.)  │
+│       ☑ Mapbox / Traffic    (congestion à depart_at)         │
+│       ☑ OSRM (free-flow)    (fallback / recoupement)         │
 │  5. Heure départ (depart_at) — congestion Mapbox             │
 │  CTA → « Calculer l’itinéraire »                             │
 └──────────────────────────┬───────────────────────────────────┘
                            │ POST /api/route/analyze
+                           │  ↳ routing_profiles: […]  (fan-out
+                           │     parallèle ; 1er = axe S primaire ;
+                           │     secondaires projetés nearest-S)
                            ▼
 ┌──────────────────────────────────────────────────────────────┐
 │  CARTE                                                       │

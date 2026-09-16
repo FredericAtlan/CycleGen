@@ -73,11 +73,51 @@ export type RouteAnalyzeRequest = {
   address_a?: string | null;
   address_b?: string | null;
   waypoints?: WaypointSpec[];
-  routing_profile?: RoutingProfile;
+  /**
+   * DEPRECATED single-router selector; prefer `routing_profiles` (multi).
+   * Kept for backwards compat: server normalizes it into a 1-element list.
+   */
+  routing_profile?: RoutingProfile | null;
+  /** Ordered list of routers to call in parallel (first = primary geometry). */
+  routing_profiles?: RoutingProfile[];
   /** Departure timestamp (ISO 8601) for traffic envelope. */
   depart_at: string;
   /** Comfort lateral acceleration for curve speed limit (m/s²). */
   a_y_mps2?: number;
+};
+
+/** Canonical router keys mirrored from `backend/app/services/routing/multi.py`. */
+export type RouterKey = "here" | "mapbox" | "osrm";
+
+export const ROUTER_LABELS: Record<RouterKey, string> = {
+  here: "HERE / ADAS",
+  mapbox: "Mapbox / Traffic",
+  osrm: "OSRM (free-flow)",
+};
+
+export const ROUTER_TO_PROFILE: Record<RouterKey, RoutingProfile> = {
+  here: "HERE/ADAS",
+  mapbox: "Mapbox/Traffic",
+  osrm: "Car/OSRM",
+};
+
+export const PROFILE_TO_ROUTER: Record<RoutingProfile, RouterKey> = {
+  "HERE/ADAS": "here",
+  "Mapbox/Traffic": "mapbox",
+  "Car/OSRM": "osrm",
+};
+
+export type ElevationSourceKey =
+  | "here"
+  | "open-meteo"
+  | "open-elevation"
+  | "opentopodata";
+
+export const ELEVATION_SOURCE_LABELS: Record<ElevationSourceKey, string> = {
+  "here": "HERE (polyline 3D)",
+  "open-meteo": "DEM Open-Meteo",
+  "open-elevation": "Open-Elevation",
+  "opentopodata": "OpenTopoData (ASTER 30 m)",
 };
 
 export type RouteAnalyzeResponse = {
@@ -97,10 +137,30 @@ export type RouteAnalyzeResponse = {
   traffic_source?: string;
   warnings?: CycleGenWarning[];
   road_structures?: RoadStructureSegment[];
+  osm_speed_limits?: Array<{
+    lat0: number;
+    lon0: number;
+    lat1: number;
+    lon1: number;
+    maxspeed_kmh: number;
+    highway?: string | null;
+    osm_id?: number | null;
+    geometry?: LatLon[];
+  }>;
   segment_traffic_speeds_mps?: number[];
   depart_at?: string | null;
   a_y_mps2?: number;
   elevation_source?: string | null;
+  /** Ordered list of routers that actually contributed (first = primary geometry). */
+  routers_used?: RouterKey[];
+  /** Per-router V_legal (m/s) aligned on the primary S-axis. */
+  segment_speeds_by_router?: Partial<Record<RouterKey, number[]>>;
+  /** Per-router V_traffic (m/s) aligned on the primary S-axis. */
+  segment_traffic_speeds_by_router?: Partial<Record<RouterKey, number[]>>;
+  /** Per-source Z (m) aligned on the primary S-axis. */
+  elevations_by_source?: Partial<Record<ElevationSourceKey, number[]>>;
+  /** Per-router outcome tag: 'ok' | 'skipped:no_key' | 'error:...'. */
+  router_status?: Partial<Record<RouterKey, string>>;
 };
 
 export const MAX_WAYPOINTS = 20;
@@ -197,6 +257,15 @@ export type CorridorBuildRequest = {
   enable_speed_limits?: boolean;
   global_max_speed_kmh?: number;
   include_traffic_in_envelope?: boolean;
+  /** Router sources to combine into V_legal (subset of 'here','mapbox','osrm','osm'). */
+  speed_sources?: Array<RouterKey | "osm">;
+  speed_combine?: "min" | "mean_snap" | "majority";
+  /** Elevation sources to combine into Z. */
+  elevation_sources?: ElevationSourceKey[];
+  elevation_combine?: "mean" | "min" | "max";
+  /** Optional hard clamps on V_envelope (km/h). */
+  speed_min_kmh?: number | null;
+  speed_max_kmh?: number | null;
 };
 
 export type CorridorBuildResponse = {

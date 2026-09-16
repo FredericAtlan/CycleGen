@@ -1,36 +1,73 @@
 # Étape 2 — Contraintes
 
-> Objectif : transformer la route analysée en **cycle spatial** — enveloppes de vitesse, pente, feux — avant toute simulation micro.
+> Objectif : transformer la route analysée en **cycle spatial** — enveloppes de vitesse et pente en fonction de la distance, feux — avant toute simulation micro.
+
+Cette étape est un **atelier spatial `f(s)`** : deux sections (Vitesse et Pente), chacune avec ses sources cochables (par routeur), son filtre spatial, ses bornes min/max, et un mini-chart cliquable pour ouvrir un **drawer glissant 75 % de la largeur**.
+
+## Ce qui est ici · Ce qui n'est pas
+
+Ici (Contraintes = tout ce qui borne à distance donnée) :
+
+- Sources V_legal cochables par routeur (HERE / Mapbox / OSRM) + overlay OSM
+- Toggle « Respecter les limites de vitesse »
+- Filtre spatial sur V_legal (none / majority / min / mean_snap)
+- V min / V max en km/h (clamps facultatifs sur V_envelope)
+- Sources Z cochables par source (HERE / Open-Meteo / Open-Elevation / OpenTopoData) + combine `mean|min|max`
+- Processeur spatial pente (fenêtre Z, L trapèze)
+- α min / α max en % (clamps bilatéraux)
+- Feux tricolores (inchangé)
+
+Migré ailleurs (pour ne pas mélanger domaine environnemental et physique véhicule) :
+
+| Contrôle | Ancienne place | Nouvelle place |
+|---|---|---|
+| Vitesse max véhicule (Vmax) | Trajet / Contraintes | **Comportement** (step 3) |
+| Latéral en virage `a_y` | Contraintes | **Comportement** (step 3) — scaling client `V_curve ∝ √a_y` |
+| Bruit stochastique Markov | Trajet | **Comportement** (step 3) |
+| Sélection routeur (single) | Trajet (select) | **Trajet** (cases à cocher multi) |
 
 ## Flux UI
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│  SIDEBAR · Contraintes                                      │
+│  SIDEBAR · Contraintes  (contrôles slim)                    │
+│  · Feux (inchangé)                                          │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+┌─────────────────────────┴───────────────────────────────────┐
+│  MAIN · Constraint Workspace (~75 % largeur zone contenu)   │
 │                                                             │
-│  ┌─ Pente & algorithme ────────────────────────────────┐   │
-│  │ 1) min/max imposés · 2) L · lissage · clamp        │   │
-│  └─────────────────────────────────────────────────────┘   │
-│  ┌─ Profil de pente ───────────────────────────────────┐   │
-│  │ 3) impact · unité %/°/rad · chart 1 km · observés  │   │
-│  └─────────────────────────────────────────────────────┘   │
-│  ┌─ Feux tricolores ───────────────────────────────────┐   │
-│  │ Avec / Sans · édition S_feux · tls_mode             │   │
-│  └─────────────────────────────────────────────────────┘   │
-│  ┌─ Enveloppes ────────────────────────────────────────┐   │
-│  │ masques Légal ∩ Trafic ∩ Virage                     │   │
-│  └─────────────────────────────────────────────────────┘   │
-│  CTA → « Construire le cycle »                              │
-└──────────────────────────┬──────────────────────────────────┘
-                           │ POST /api/corridor/build
-                           ▼
+│  ┌─ Vitesse ─────────────────────────────────────────────┐  │
+│  │ sources routeurs · respect limites · filtre spatial   │  │
+│  │ Vmin/Vmax · mini-chart SpeedLimit (agrandir → 75 vw)  │  │
+│  └───────────────────────────────────────────────────────┘  │
+│  ┌─ Pente ───────────────────────────────────────────────┐  │
+│  │ sources Z + combine · processeur spatial · α min/max  │  │
+│  │ mini-charts α(s) + bandes 1 km (agrandir → 75 vw)     │  │
+│  └───────────────────────────────────────────────────────┘  │
+└─────────────────────────┬───────────────────────────────────┘
+                          │ POST /api/corridor/build (debounce 300 ms)
+                          ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  SpatialCorridor                                            │
 │  S, α, V_legal, V_traffic, V_curve, V_envelope, S_feux, z   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Changer lissage, **taille des trapèzes L**, clamp ou bornes α déclenche en principe un **rebuild** du cycle spatial (mêmes géométrie / segments, nouvelle chaîne altitude → pente). Les masques d’enveloppe s’appliquent surtout **côté client** sans forcément rappeler l’API.
+Toute case cochée / décochée d'une **source** ou d'un filtre spatial déclenche un rebuild serveur **debouncé à 300 ms**. Les toggles d'enveloppe (`legal / traffic / curve`), `Vmin/Vmax` et `a_y` s'appliquent en revanche **côté client** via `applyEnvelopeMask` (pas de réseau).
+
+## Multi-routeur : sources V_legal
+
+L'étape Trajet appelle en parallèle chaque routeur coché (HERE / Mapbox / OSRM). Le premier fournit la **géométrie primaire** (axe S) ; les suivants sont projetés dessus (nearest-S). Chaque source est ensuite exposée ici en case à cocher :
+
+| Source | Origine | Défaut |
+|---|---|---|
+| V_legal HERE | `spans=maxSpeed` (Flexible Polyline) | ON si HERE actif |
+| V_legal Mapbox | `annotation.speed` (free-flow) | ON si Mapbox actif |
+| V_legal OSRM | `annotation.speed` | ON si OSRM appelé |
+| V_legal OSM | Overlay tags `maxspeed` (Overpass) | ON |
+
+Combinaison : `min` (défaut, respect du plus contraignant), `mean_snap` (moyenne re-snappée sur les paliers réglementaires), `majority` (bin dominant, robuste au bruit de plaque).
 
 ---
 

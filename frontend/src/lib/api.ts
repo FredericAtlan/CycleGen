@@ -8,10 +8,13 @@ import type {
   CorridorBuildRequest,
   CorridorBuildResponse,
   DriverProfile,
+  ElevationSourceKey,
   ExportFormat,
   ExportRequest,
   RouteAnalyzeRequest,
   RouteAnalyzeResponse,
+  RouterKey,
+  RoutingProfile,
   ScenarioRunRequest,
   ScenarioRunResponse,
   SimEngine,
@@ -49,7 +52,10 @@ export type AnalyzeRouteParams = {
   addressA?: string | null;
   addressB?: string | null;
   waypoints?: WaypointSpec[];
-  routingProfile?: RouteAnalyzeRequest["routing_profile"];
+  /** DEPRECATED — use `routingProfiles`. Kept for backwards compat callers. */
+  routingProfile?: RoutingProfile | null;
+  /** Ordered list of routers to call in parallel (first = primary geometry). */
+  routingProfiles?: RoutingProfile[];
   /** Departure timestamp as ISO 8601 string. */
   departAt: string;
   /** Comfort lateral acceleration (m/s²). */
@@ -141,10 +147,14 @@ export async function analyzeRoute(
     address_a: params.addressA ?? null,
     address_b: params.addressB ?? null,
     waypoints: params.waypoints ?? [],
-    routing_profile: params.routingProfile ?? "Mapbox/Traffic",
     depart_at: params.departAt,
     a_y_mps2: params.aY,
   };
+  if (params.routingProfiles && params.routingProfiles.length > 0) {
+    body.routing_profiles = params.routingProfiles;
+  } else if (params.routingProfile) {
+    body.routing_profile = params.routingProfile;
+  }
 
   return postJson<RouteAnalyzeResponse>(
     "/api/route/analyze",
@@ -174,6 +184,12 @@ export async function buildCorridor(
     enableSpeedLimits?: boolean;
     globalMaxSpeedKmh?: number;
     includeTrafficInEnvelope?: boolean;
+    speedSources?: Array<RouterKey | "osm">;
+    speedCombine?: "min" | "mean_snap" | "majority";
+    elevationSources?: ElevationSourceKey[];
+    elevationCombine?: "mean" | "min" | "max";
+    speedMinKmh?: number | null;
+    speedMaxKmh?: number | null;
   }
 ): Promise<CorridorBuildResponse> {
   const body: CorridorBuildRequest = {
@@ -192,6 +208,12 @@ export async function buildCorridor(
     enable_speed_limits: options?.enableSpeedLimits,
     global_max_speed_kmh: options?.globalMaxSpeedKmh,
     include_traffic_in_envelope: options?.includeTrafficInEnvelope,
+    speed_sources: options?.speedSources,
+    speed_combine: options?.speedCombine,
+    elevation_sources: options?.elevationSources,
+    elevation_combine: options?.elevationCombine,
+    speed_min_kmh: options?.speedMinKmh ?? null,
+    speed_max_kmh: options?.speedMaxKmh ?? null,
   };
 
   return postJson<CorridorBuildResponse>(

@@ -8,14 +8,18 @@
 ┌─────────────────────────────────────────────────────────────┐
 │  SIDEBAR · Comportement                                     │
 │                                                             │
+│  ┌─ Vmax · Virage · Bruit ─────────────────────────────┐   │
+│  │ Vmax véhicule (km/h)                                │   │
+│  │ Latéral en virage a_y (m/s²) — V_curve ∝ √a_y       │   │
+│  │ Bruit stochastique Markov (IDM)                     │   │
+│  └─────────────────────────────────────────────────────┘   │
 │  ┌─ Moteur ────────────┐  IDM (défaut) | SUMO               │
 │  └─────────────────────┘                                    │
 │  ┌─ Conducteur ────────────────────────────────────────┐   │
 │  │ Profil Eco / Normal / Agressif / Sportif            │   │
 │  │ a_max, b_comf, speed_factor (ou % Sportif)          │   │
-│  │ a_y latéral (virages) — reconstruit V_curve         │   │
-│  │ Vmax véhicule                                       │   │
-│  │ Zones conducteur (optionnel, par tronçons de S)     │   │
+│  └─────────────────────────────────────────────────────┘   │
+│  ┌─ Zones conducteur (optionnel, par tronçons de S) ──┐   │
 │  └─────────────────────────────────────────────────────┘   │
 │  ┌─ Véhicule ──────────────────────────────────────────┐   │
 │  │ masse, F0/F1/F2, r_dyn → P / couple (analyse)       │   │

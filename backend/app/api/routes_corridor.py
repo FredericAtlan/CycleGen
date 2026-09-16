@@ -41,6 +41,12 @@ async def build_corridor(body: CorridorBuildRequest) -> CorridorBuildResponse:
         enable_speed_limits=body.enable_speed_limits,
         global_max_speed_kmh=body.global_max_speed_kmh,
         include_traffic_in_envelope=body.include_traffic_in_envelope,
+        speed_sources=list(body.speed_sources or []) or None,
+        speed_combine=body.speed_combine,
+        elevation_sources=list(body.elevation_sources or []) or None,
+        elevation_combine=body.elevation_combine,
+        speed_min_kmh=body.speed_min_kmh,
+        speed_max_kmh=body.speed_max_kmh,
     )
     corridor_id = uuid4().hex
     CORRIDOR_STORE[corridor_id] = corridor

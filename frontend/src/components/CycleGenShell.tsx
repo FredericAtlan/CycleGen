@@ -6,6 +6,17 @@ import DynamicMap from "@/components/DynamicMap";
 import RoadLoupe3D from "@/components/corridor/RoadLoupe3D";
 import Sidebar from "@/components/Sidebar";
 import MapCameraControls from "@/components/MapCameraControls";
+import { ChartFocusHostProvider } from "@/components/corridor/ChartFocusHost";
+import ConstraintWorkspace, {
+  type ElevationCombineMode,
+  type LegalSmoothMode,
+} from "@/components/corridor/ConstraintWorkspace";
+import {
+  buildElevationSourceRows,
+  buildSpeedSourceRows,
+  type SpeedSourceKey,
+} from "@/components/corridor/RouterSourceToggles";
+import type { ElevationSourceKey } from "@/lib/types";
 import {
   DEFAULT_MAP_SPEED_LAYERS,
   type MapSpeedLayers,
@@ -293,6 +304,14 @@ export default function CycleGenShell() {
   const [routingProfile, setRoutingProfile] = useState<RoutingProfile>(
     () => (boot?.routingProfile as RoutingProfile) ?? "HERE/ADAS"
   );
+  // Multi-router selection (ordered ; first = primary geometry).
+  const [routingProfiles, setRoutingProfiles] = useState<RoutingProfile[]>(
+    () => {
+      const primary =
+        (boot?.routingProfile as RoutingProfile) ?? "HERE/ADAS";
+      return [primary];
+    }
+  );
   const [departAt, setDepartAt] = useState(
     () => boot?.departAt ?? toDatetimeLocalValue(new Date())
   );
@@ -423,6 +442,26 @@ export default function CycleGenShell() {
   const [enableMarkov, setEnableMarkov] = useState(
     () => boot?.enableMarkov ?? false
   );
+  // Contraintes step 2 — sources cochables + clamps.
+  const [speedSources, setSpeedSources] = useState<SpeedSourceKey[]>([
+    "here",
+    "mapbox",
+    "osrm",
+    "osm",
+  ]);
+  const [elevationSources, setElevationSources] = useState<ElevationSourceKey[]>(
+    ["here", "open-meteo", "open-elevation", "opentopodata"]
+  );
+  const [elevationCombine, setElevationCombine] =
+    useState<ElevationCombineMode>("mean");
+  const [speedMinKmh, setSpeedMinKmh] = useState<number | null>(null);
+  const [speedMaxKmh, setSpeedMaxKmh] = useState<number | null>(null);
+  const [respectLegalLimits, setRespectLegalLimits] = useState(true);
+  const [legalSmoothModeLocal, setLegalSmoothModeLocal] =
+    useState<LegalSmoothMode>("majority");
+  const [legalSmoothWindowLocal, setLegalSmoothWindowLocal] = useState(250);
+  const [slopeSpatialWindowLocal, setSlopeSpatialWindowLocal] = useState(150);
+  const [trapLengthMLocal, setTrapLengthMLocal] = useState(50);
   const [corridorProfileBusy, setCorridorProfileBusy] = useState(false);
   const [includeTrafficLights, setIncludeTrafficLights] = useState(
     () => boot?.includeTrafficLights ?? true
@@ -1271,12 +1310,20 @@ export default function CycleGenShell() {
           legalSmoothMode: legal.mode,
           legalSmoothWindowM: legal.windowM,
           legalMinRunM: legal.minRunM,
-          enableSpeedLimits: envelopeMask.legal,
+          enableSpeedLimits: respectLegalLimits && envelopeMask.legal,
           globalMaxSpeedKmh: maxSpeedKmh ?? 130,
           includeTrafficInEnvelope: envelopeMask.traffic,
+          speedSources,
+          elevationSources,
+          elevationCombine,
+          speedMinKmh,
+          speedMaxKmh,
         });
         const masked = applyEnvelopeMask(result.corridor, envelopeMask, {
           globalMaxKmh: maxSpeedKmh,
+          aY,
+          speedMinKmh,
+          speedMaxKmh,
         });
         const snap = snapshotFeux(masked);
         if (snap) feuxBackupRef.current = snap;
@@ -1356,7 +1403,26 @@ export default function CycleGenShell() {
         setBuildingCorridor(false);
       }
     },
-    [aY, envelopeMask, envelopeKey, includeTrafficLights, slopeAlgo, legalFilter, maxSpeedKmh, routingProfile, waypoints, departAt, departureLabel, destinationLabel]
+    [
+      aY,
+      envelopeMask,
+      envelopeKey,
+      includeTrafficLights,
+      slopeAlgo,
+      legalFilter,
+      maxSpeedKmh,
+      routingProfile,
+      waypoints,
+      departAt,
+      departureLabel,
+      destinationLabel,
+      respectLegalLimits,
+      speedSources,
+      elevationSources,
+      elevationCombine,
+      speedMinKmh,
+      speedMaxKmh,
+    ]
   );
 
   const handleIncludeTrafficLightsChange = useCallback(
@@ -1484,11 +1550,14 @@ export default function CycleGenShell() {
       setEnvelopeMask(mask);
       setCorridor((prev) =>
         prev
-          ? applyEnvelopeMask(prev, mask, { globalMaxKmh: maxSpeedKmh })
+          ? applyEnvelopeMask(prev, mask, {
+              globalMaxKmh: maxSpeedKmh,
+              aY,
+            })
           : prev
       );
     },
-    [maxSpeedKmh]
+    [aY, maxSpeedKmh]
   );
 
   const handleMaxSpeedKmhChange = useCallback(
@@ -1496,21 +1565,70 @@ export default function CycleGenShell() {
       setMaxSpeedKmh(value);
       setCorridor((prev) =>
         prev
-          ? applyEnvelopeMask(prev, envelopeMask, { globalMaxKmh: value })
+          ? applyEnvelopeMask(prev, envelopeMask, {
+              globalMaxKmh: value,
+              aY,
+            })
           : prev
       );
     },
-    [envelopeMask]
+    [aY, envelopeMask]
   );
+
+  const handleAYChange = useCallback(
+    (value: number) => {
+      setAY(value);
+      setCorridor((prev) =>
+        prev
+          ? applyEnvelopeMask(prev, envelopeMask, {
+              globalMaxKmh: maxSpeedKmh,
+              aY: value,
+              speedMinKmh,
+              speedMaxKmh,
+            })
+          : prev
+      );
+    },
+    [envelopeMask, maxSpeedKmh, speedMinKmh, speedMaxKmh]
+  );
+
+  // Debounced spatial-filter rebuild (300 ms) — called by the workspace when
+  // an option that requires a server rebuild changes (legal_smooth_mode,
+  // trap_length, alpha_min/max, elevation_combine, speed_min/max, sources).
+  const rebuildDebounceRef = useRef<number | null>(null);
+  const requestConstraintRebuild = useCallback(() => {
+    if (!routeResult) return;
+    if (rebuildDebounceRef.current != null) {
+      window.clearTimeout(rebuildDebounceRef.current);
+    }
+    rebuildDebounceRef.current = window.setTimeout(() => {
+      rebuildDebounceRef.current = null;
+      void runBuildCorridor(routeResult);
+    }, 300);
+  }, [routeResult, runBuildCorridor]);
+  useEffect(() => {
+    return () => {
+      if (rebuildDebounceRef.current != null) {
+        window.clearTimeout(rebuildDebounceRef.current);
+      }
+    };
+  }, []);
 
   const handleApplyHomologationPreset = useCallback(() => {
     setRoutingProfile("HERE/ADAS");
+    setRoutingProfiles(["HERE/ADAS"]);
     setMaxSpeedKmh(130);
     setEnableMarkov(false);
+    setAY(3.5);
     const mask: EnvelopeMask = { legal: true, traffic: false, curve: true };
     setEnvelopeMask(mask);
     setCorridor((prev) =>
-      prev ? applyEnvelopeMask(prev, mask, { globalMaxKmh: 130 }) : prev
+      prev
+        ? applyEnvelopeMask(prev, mask, {
+            globalMaxKmh: 130,
+            aY: 3.5,
+          })
+        : prev
     );
   }, []);
 
@@ -2084,6 +2202,8 @@ export default function CycleGenShell() {
           stop_duration_s: w.stop_duration_s,
         })),
         routingProfile,
+        routingProfiles:
+          routingProfiles.length > 0 ? routingProfiles : [routingProfile],
         departAt: datetimeLocalToIso(departAt),
         aY,
       });
@@ -2170,6 +2290,7 @@ export default function CycleGenShell() {
     destinationLabel,
     waypoints,
     routingProfile,
+    routingProfiles,
     departAt,
     aY,
     resetSimState,
@@ -2474,8 +2595,14 @@ export default function CycleGenShell() {
     pointB,
   ]);
 
-  /** Map + right column (no left sidebar): live animation and results. */
-  const mapRightLayout = isLiveRun || activeStep === 4 || noGpsBase;
+  /** Map narrows to a rail so a right panel can host analysis charts. */
+  const mapRightLayout =
+    isLiveRun ||
+    activeStep === 4 ||
+    noGpsBase ||
+    (activeStep === 2 && !!corridor);
+  /** Sidebar hidden only when the whole left column is a rail (live/results/no-gps). */
+  const hideSidebar = isLiveRun || activeStep === 4 || noGpsBase;
 
   const mapRightPrev = useRef(false);
   useEffect(() => {
@@ -2829,9 +2956,10 @@ export default function CycleGenShell() {
   }, [profile, corridor, geometry.length]);
 
   return (
+    <ChartFocusHostProvider>
     <div className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-slate-50 text-slate-900">
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-      {!mapRightLayout && (
+      {!hideSidebar && (
       <Sidebar
         activeStep={activeStep}
         departureLabel={departureLabel}
@@ -2865,10 +2993,16 @@ export default function CycleGenShell() {
         onRoutingProfileChange={(v) =>
           setRoutingProfile(v as RoutingProfile)
         }
+        routingProfiles={routingProfiles}
+        onRoutingProfilesChange={(next) => {
+          setRoutingProfiles(next);
+          if (next.length > 0) setRoutingProfile(next[0]);
+        }}
+        routerStatus={routeResult?.router_status ?? undefined}
         departAt={departAt}
         onDepartAtChange={setDepartAt}
         aY={aY}
-        onAYChange={setAY}
+        onAYChange={handleAYChange}
         trafficSource={trafficSource}
         warnings={warnings}
         driverProfile={driverProfile}
@@ -3092,6 +3226,84 @@ export default function CycleGenShell() {
         })()}
         </div>
 
+        {!isLiveRun && activeStep === 2 && corridor && routeResult && (
+          <aside className="flex h-full min-w-0 flex-1 flex-col border-l border-slate-200 bg-white">
+            <ConstraintWorkspace
+              corridor={corridor}
+              meta={{
+                originLat: pointA?.lat ?? null,
+                originLon: pointA?.lon ?? null,
+                destLat: pointB?.lat ?? null,
+                destLon: pointB?.lon ?? null,
+                originLabel: departureLabel,
+                destLabel: destinationLabel,
+              }}
+              envelopeMask={envelopeMask}
+              onEnvelopeMaskChange={handleEnvelopeMaskChange}
+              speedSources={speedSources}
+              onSpeedSourcesChange={setSpeedSources}
+              speedSourceRows={buildSpeedSourceRows({
+                routersUsed: routeResult.routers_used,
+                routerStatus: routeResult.router_status,
+                speedsByRouter: routeResult.segment_speeds_by_router,
+                osmSpeedLimitsCount:
+                  routeResult.osm_speed_limits?.length ?? 0,
+              })}
+              legalSmoothMode={legalSmoothModeLocal}
+              onLegalSmoothModeChange={(m) => {
+                setLegalSmoothModeLocal(m);
+                setLegalFilter((prev) => ({ ...prev, mode: m }));
+              }}
+              legalSmoothWindowM={legalSmoothWindowLocal}
+              onLegalSmoothWindowChange={(w) => {
+                setLegalSmoothWindowLocal(w);
+                setLegalFilter((prev) => ({ ...prev, windowM: w }));
+              }}
+              respectLegalLimits={respectLegalLimits}
+              onRespectLegalLimitsChange={setRespectLegalLimits}
+              speedMinKmh={speedMinKmh}
+              onSpeedMinKmhChange={setSpeedMinKmh}
+              speedMaxKmh={speedMaxKmh}
+              onSpeedMaxKmhChange={setSpeedMaxKmh}
+              globalMaxKmh={maxSpeedKmh}
+              trafficSource={trafficSource}
+              routersUsed={routeResult.routers_used}
+              elevationSources={elevationSources}
+              onElevationSourcesChange={setElevationSources}
+              elevationSourceRows={buildElevationSourceRows({
+                elevationsBySource: routeResult.elevations_by_source,
+                elevationSourceTag: routeResult.elevation_source,
+              })}
+              elevationCombine={elevationCombine}
+              onElevationCombineChange={setElevationCombine}
+              slopeSpatialWindowM={slopeSpatialWindowLocal}
+              onSlopeSpatialWindowChange={(w) => {
+                setSlopeSpatialWindowLocal(w);
+                setSlopeAlgo((prev) => ({ ...prev, sgMinSpanM: w }));
+              }}
+              alphaMinPct={slopeAlgo.alphaMinPct ?? null}
+              onAlphaMinPctChange={(v) =>
+                setSlopeAlgo((prev) => ({ ...prev, alphaMinPct: v }))
+              }
+              alphaMaxPct={slopeAlgo.alphaMaxPct ?? null}
+              onAlphaMaxPctChange={(v) =>
+                setSlopeAlgo((prev) => ({ ...prev, alphaMaxPct: v }))
+              }
+              slopeUnit={slopeUnit}
+              onSlopeUnitChange={setSlopeUnit}
+              trapLengthM={trapLengthMLocal}
+              onTrapLengthMChange={(v) => {
+                setTrapLengthMLocal(v);
+                setSlopeAlgo((prev) => ({ ...prev, trapLengthM: v }));
+              }}
+              onCursorS={setChartCursorS}
+              onBrushRangeS={handleBrushRangeS}
+              highlightS={chartCursorS ?? null}
+              onRequestRebuild={requestConstraintRebuild}
+            />
+          </aside>
+        )}
+
         {isLiveRun && (
           <LiveAnalysisPanel
             series={series}
@@ -3272,6 +3484,7 @@ export default function CycleGenShell() {
       )}
       </div>
     </div>
+    </ChartFocusHostProvider>
   );
 }
 

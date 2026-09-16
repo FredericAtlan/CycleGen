@@ -25,7 +25,12 @@ from app.models.schemas import (
     TrafficSignalPoint,
 )
 from app.services.osm_maxspeed import parse_osm_maxspeed_kmh, snap_kmh_to_posted
-from app.services.routing import HereRouter, MapboxRouter, OsrmRouter
+from app.services.routing import (
+    HereRouter,
+    MapboxRouter,
+    OsrmRouter,
+    analyze_multi_router,
+)
 from app.services.secrets_redact import redact_secrets
 
 logger = logging.getLogger(__name__)
@@ -249,6 +254,7 @@ class SpatialDataAcquisition:
         depart_at=None,
         a_y_mps2: float = 2.5,
         routing_profile: RoutingProfile | str | None = None,
+        routing_profiles: list[RoutingProfile | str] | None = None,
     ) -> RouteAnalyzeResponse:
         from datetime import datetime, timezone
 
@@ -259,49 +265,47 @@ class SpatialDataAcquisition:
             if depart_at is None:
                 depart_at = datetime.now(timezone.utc)
 
-            profile = routing_profile
-            if isinstance(profile, str):
-                try:
-                    profile = RoutingProfile(profile)
-                except ValueError:
-                    profile = RoutingProfile.MAPBOX_TRAFFIC
-            if profile is None:
-                profile = RoutingProfile.MAPBOX_TRAFFIC
+            def _normalize_profiles(
+                explicit: list[RoutingProfile | str] | None,
+                singular: RoutingProfile | str | None,
+            ) -> list[RoutingProfile]:
+                seen: set[RoutingProfile] = set()
+                out: list[RoutingProfile] = []
+                candidates: list[RoutingProfile | str] = []
+                if explicit:
+                    candidates.extend(explicit)
+                if singular is not None:
+                    candidates.append(singular)
+                for raw in candidates:
+                    if raw is None:
+                        continue
+                    prof: RoutingProfile
+                    if isinstance(raw, RoutingProfile):
+                        prof = raw
+                    else:
+                        try:
+                            prof = RoutingProfile(raw)
+                        except ValueError:
+                            continue
+                    if prof in seen:
+                        continue
+                    seen.add(prof)
+                    out.append(prof)
+                return out
 
-            osrm = OsrmRouter(
-                base_url=self.osrm_base_url,
+            profiles = _normalize_profiles(routing_profiles, routing_profile)
+
+            multi = await analyze_multi_router(
+                start=(lat_a, lon_a),
+                end=(lat_b, lon_b),
+                vias=vias,
+                depart_at=depart_at,
+                requested_profiles=profiles or None,
                 client=self.client,
                 request_json=self._request_json,
+                osrm_base_url=self.osrm_base_url,
             )
-            if profile == RoutingProfile.HERE_ADAS:
-                traffic = await HereRouter(
-                    client=self.client,
-                    request_json=self._request_json,
-                ).route(
-                    (lat_a, lon_a),
-                    (lat_b, lon_b),
-                    vias=vias,
-                    depart_at=depart_at,
-                )
-            elif profile == RoutingProfile.CAR_OSRM:
-                traffic = await osrm.route(
-                    (lat_a, lon_a),
-                    (lat_b, lon_b),
-                    vias=vias,
-                    depart_at=depart_at,
-                )
-            else:
-                mapbox = MapboxRouter(
-                    client=self.client,
-                    request_json=self._request_json,
-                    fallback=osrm,
-                )
-                traffic = await mapbox.route(
-                    (lat_a, lon_a),
-                    (lat_b, lon_b),
-                    vias=vias,
-                    depart_at=depart_at,
-                )
+            traffic = multi.primary
 
             coords = [[p.lat, p.lon] for p in traffic.geometry]
             if not coords:
@@ -343,23 +347,27 @@ class SpatialDataAcquisition:
                 )
                 speed_limits = []
 
-            elevation_source: str | None = None
-            here_elev = getattr(traffic, "elevations_m", None)
+            # Elevation sources: HERE if it delivered a usable Z, otherwise DEM.
+            elevations_by_source: dict[str, list[float]] = {
+                k: list(v) for k, v in multi.elevations_by_source.items() if v
+            }
+            here_elev = elevations_by_source.get("here")
             if (
                 here_elev
                 and len(here_elev) == len(coords)
-                and any(
-                    e is not None and float(e) != 0.0
-                    for e in here_elev
-                )
+                and any(e != 0.0 for e in here_elev)
             ):
-                elevations = [float(e) for e in here_elev]
+                elevations = list(here_elev)
                 elevation_source = "here"
             else:
                 elevations = await self._fetch_elevations(coords)
                 elevation_source = "dem"
+                if any(e != 0.0 for e in elevations):
+                    # Tag by the concrete provider when we know it (Open-Meteo
+                    # always first in the fallback chain).
+                    elevations_by_source.setdefault("open-meteo", list(elevations))
 
-            warnings = list(traffic.warnings)
+            warnings = list(multi.warnings)
             if not any(e != 0.0 for e in elevations):
                 warnings.append(
                     CycleGenWarning(
@@ -393,6 +401,15 @@ class SpatialDataAcquisition:
                 depart_at=depart_at,
                 elevation_source=elevation_source,
                 a_y_mps2=a_y_mps2,
+                routers_used=list(multi.routers_used),
+                segment_speeds_by_router={
+                    k: list(v) for k, v in multi.legal_by_router.items()
+                },
+                segment_traffic_speeds_by_router={
+                    k: list(v) for k, v in multi.traffic_by_router.items()
+                },
+                elevations_by_source=elevations_by_source,
+                router_status=dict(multi.router_status),
             )
         finally:
             if owns and self._client is not None:
