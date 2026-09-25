@@ -1,6 +1,6 @@
 # CycleGen calibration — AVL N90 (BSM→Albertville)
 
-Generated: `2026-09-25T20:54:10.626339+00:00`
+Generated: `2026-09-25T21:32:54.944982+00:00`
 Reference: `avl_n90_bcb` · Corridor: `test-corridor` · Grid arms: **2**
 
 ## Recommended DriverPhysics
