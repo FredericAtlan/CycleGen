@@ -35,7 +35,7 @@ function summarizeWarnings(warnings: CycleGenWarning[]): string {
 
 function WarningsPanel({
   warnings,
-  title = "E · Imputations & warnings",
+  title = "Alertes & imputations",
   collapsible = true,
   defaultOpen,
   className = "",

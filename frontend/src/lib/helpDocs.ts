@@ -31,14 +31,14 @@ export const STEP_HELP_DOCS: StepHelpMeta[] = [
     step: 3,
     id: "step-3",
     file: "step-03-comportement.md",
-    title: "Étape 3 — Comportement",
-    summary: "IDM/SUMO, conducteur, véhicule, génération",
+    title: "Étape 3 — Conducteur",
+    summary: "IDM/SUMO, profil, véhicule, génération",
   },
   {
     step: 4,
     id: "step-4",
     file: "step-04-resultats.md",
-    title: "Étape 4 — Résultats",
+    title: "Étape 4 — Cycle",
     summary: "Profils, mécanique, export, Versus",
   },
 ];

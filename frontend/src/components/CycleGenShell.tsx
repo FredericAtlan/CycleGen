@@ -2123,7 +2123,7 @@ export default function CycleGenShell() {
       setMaxUnlocked(4);
       setStage("completed");
       setError(
-        "Ce cycle n’a pas de GPS — pas d’itinéraire à calculer. Analyse vitesse / pente / couple à l’étape Résultats."
+        "Ce cycle n’a pas de GPS — pas d’itinéraire à calculer. Analyse vitesse / pente / couple à l’étape Cycle."
       );
       return null;
     }
@@ -2645,7 +2645,7 @@ export default function CycleGenShell() {
     corridor.geometry.length >= 2 &&
     !profileOnlyMode;
 
-  // Sans GPS : rester sur Résultats — pas de pipeline trajet / corridor / sim.
+  // Sans GPS : rester sur Cycle — pas de pipeline trajet / corridor / sim.
   useEffect(() => {
     const labeledNoGps =
       destinationLabel.trim() === "Profil sans GPS" ||
@@ -3013,7 +3013,7 @@ export default function CycleGenShell() {
       if (simError) return simError;
       return `Simulation live (${(simEngine ?? preferredEngine).toUpperCase()})`;
     }
-    if (stage === "completed") return "Résultats — colonne droite";
+    if (stage === "completed") return "Cycle — colonne droite";
     if (activeStep === 1) return "Départ, arrivée, puis calculer l’itinéraire";
     if (activeStep === 2) return "Pente, feux, enveloppes — construire le cycle";
     if (activeStep === 3) return "Véhicule + IDM/SUMO, puis générez le cycle";
@@ -3513,7 +3513,7 @@ export default function CycleGenShell() {
               <p className="text-sm text-slate-500">
                 {noGpsBase || openEnergy
                   ? "Chargement du profil… Si rien n’apparaît, rouvrez le cycle via Bibliothèque → Étude énergie."
-                  : "Aucun profil encore — générez le cycle à l’étape Comportement."}
+                  : "Aucun profil encore — générez le cycle à l’étape Conducteur."}
               </p>
               {!(noGpsBase || openEnergy) && (
               <button

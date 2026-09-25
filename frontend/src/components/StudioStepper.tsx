@@ -5,8 +5,8 @@ export type StudioWizardStep = 1 | 2 | 3 | 4;
 export const STUDIO_WIZARD_LABELS: Record<StudioWizardStep, string> = {
   1: "Trajet",
   2: "Contraintes",
-  3: "Comportement",
-  4: "Résultats",
+  3: "Conducteur",
+  4: "Cycle",
 };
 
 type StudioStepperProps = {
@@ -15,7 +15,7 @@ type StudioStepperProps = {
   onStepChange: (step: StudioWizardStep) => void;
   /** Return to Studio home / mode picker (with confirm handled by parent). */
   onLeaveToMenu?: () => void;
-  /** When set, only this step is selectable (ex. profil sans GPS → Résultats). */
+  /** When set, only this step is selectable (ex. profil sans GPS → Cycle). */
   lockToStep?: StudioWizardStep;
   /** Cycle title in header (GPS A→B by default, saved name after save). */
   cycleTitle?: string | null;

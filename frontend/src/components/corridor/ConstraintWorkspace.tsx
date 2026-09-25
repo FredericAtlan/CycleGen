@@ -71,7 +71,7 @@ export type ConstraintWorkspaceProps = {
   onSpeedMinKmhChange: (v: number | null) => void;
   speedMaxKmh: number | null;
   onSpeedMaxKmhChange: (v: number | null) => void;
-  // Read-only for the chart (Vmax vehicle lives in Comportement).
+  // Read-only for the chart (Vmax vehicle lives in Conducteur).
   globalMaxKmh?: number | null;
   trafficSource?: string | null;
   routersUsed?: RouterKey[];
@@ -310,7 +310,7 @@ export default function ConstraintWorkspace(props: ConstraintWorkspaceProps) {
                 <p className="mt-2 text-[10px] leading-snug text-slate-500">
                   Vmax véhicule se règle dans{" "}
                   <span className="font-semibold text-slate-700">
-                    Comportement
+                    Conducteur
                   </span>{" "}
                   (domaine temporel).
                 </p>

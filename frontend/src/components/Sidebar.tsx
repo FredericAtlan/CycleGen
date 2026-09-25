@@ -622,11 +622,11 @@ export default function Sidebar({
               </div>
             </AccordionSection>
 
-            {/* Mode de conduite migré : Vmax + Markov → Comportement (step 3),
+            {/* Mode de conduite migré : Vmax + Markov → Conducteur (step 3),
                 Respecter limites + V min/max → Contraintes (step 2). */}
             <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-snug text-slate-600">
               Vmax véhicule, virage (a_y) et Markov se règlent dans{" "}
-              <span className="font-semibold">Comportement</span>. Le respect
+              <span className="font-semibold">Conducteur</span>. Le respect
               des limites, les sources de vitesse / pente et les V/α min-max
               se règlent dans <span className="font-semibold">Contraintes</span>.
             </p>
@@ -775,7 +775,7 @@ export default function Sidebar({
             {warnings.length > 0 && (
               <WarningsPanel
                 warnings={warnings}
-                title="Imputations et alertes"
+                title="Alertes & imputations"
                 collapsible
                 defaultOpen={warnings.length <= 6}
               />
@@ -1008,7 +1008,7 @@ export default function Sidebar({
                 title="Véhicule"
                 summary={
                   vehicleId
-                    ? `${getVehicle(vehicleId)?.code ?? vehicleId} · P / couple en Résultats`
+                    ? `${getVehicle(vehicleId)?.code ?? vehicleId} · P / couple en Cycle`
                     : "Masse, F0/F1/F2, r_dyn → P / couple"
                 }
                 defaultOpen
@@ -1021,7 +1021,7 @@ export default function Sidebar({
                 />
                 <p className="mt-2 text-[10px] leading-snug text-slate-500">
                   Le véhicule choisi ici sert au solveur (Vmax) et aux courbes
-                  puissance / couple aux roues à l’étape Résultats.
+                  puissance / couple aux roues à l’étape Cycle.
                 </p>
               </AccordionSection>
             )}

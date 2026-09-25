@@ -4,6 +4,7 @@ import { useMemo, useState, useEffect } from "react";
 import DownloadButtons from "@/components/export/DownloadButtons";
 import SaveCycleButton from "@/components/SaveCycleButton";
 import ResultsAnalyseStudio from "@/components/export/ResultsAnalyseStudio";
+import SafetyAuditBanner from "@/components/scenarios/SafetyAuditBanner";
 import WarningsPanel, {
   trafficSourceBadgeClass,
   trafficSourceLabel,
@@ -448,7 +449,7 @@ export default function ResultsAnalysisPanel({
 
       {!noGps && vehicle && (
         <p className="shrink-0 border-b border-slate-100 px-3 py-1.5 text-[11px] text-slate-500">
-          Véhicule (étape Comportement) :{" "}
+          Véhicule (étape Conducteur) :{" "}
           <span className="font-semibold text-slate-700">
             {vehicle.name} · {vehicle.code} · {vehicle.massCode}{" "}
             {Math.round(vehicle.mass_kg)} kg · F0={vehicle.f0_n} N
@@ -456,6 +457,8 @@ export default function ResultsAnalysisPanel({
           {" — "}courbes P / couple aux roues ci-dessous.
         </p>
       )}
+
+      <SafetyAuditBanner profile={profile} />
 
       <ResultsAnalyseStudio
         rows={inspectRows}
