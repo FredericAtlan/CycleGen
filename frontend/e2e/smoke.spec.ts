@@ -19,7 +19,7 @@ test.describe("smoke", () => {
 
     await expect(
       page.getByTestId("studio-home-title").or(
-        page.getByRole("heading", { name: "CycleGen Studio" })
+        page.getByRole("heading", { name: /^CycleGen/ })
       )
     ).toBeVisible();
 

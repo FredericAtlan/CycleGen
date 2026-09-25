@@ -789,6 +789,56 @@ export default function Sidebar({
 
         {activeStep === 3 && (
           <div className="flex flex-col gap-3">
+            <div
+              className="flex flex-wrap gap-1.5"
+              aria-label="État du run"
+              role="status"
+            >
+              <span
+                className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${
+                  preferredEngine === "sumo"
+                    ? "bg-slate-900 text-white"
+                    : "bg-slate-100 text-slate-700"
+                }`}
+              >
+                {preferredEngine === "sumo" ? "SUMO" : "IDM"}
+              </span>
+              <span
+                className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${
+                  enableMarkov
+                    ? "bg-amber-100 text-amber-900"
+                    : "bg-emerald-50 text-emerald-800"
+                }`}
+              >
+                Markov {enableMarkov ? "ON" : "OFF"}
+              </span>
+              <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                a_y {aY.toFixed(1)}
+              </span>
+              {envelopeMask && (
+                <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                  mask{" "}
+                  {[
+                    envelopeMask.legal ? "L" : null,
+                    envelopeMask.traffic ? "T" : null,
+                    envelopeMask.curve ? "V" : null,
+                  ]
+                    .filter(Boolean)
+                    .join("·") || "—"}
+                </span>
+              )}
+              {onApplyHomologationPreset && (
+                <button
+                  type="button"
+                  disabled={paramsDisabled}
+                  onClick={onApplyHomologationPreset}
+                  className="rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  title="Markov OFF, a_y=3.5, mask AVL"
+                >
+                  Homologation AVL
+                </button>
+              )}
+            </div>
             <AccordionSection
               title="Vmax · Virage · Bruit"
               summary={`Vmax ${maxSpeedKmh ?? "—"} · a_y ${aY.toFixed(1)} · Markov ${enableMarkov ? "ON" : "OFF"}`}

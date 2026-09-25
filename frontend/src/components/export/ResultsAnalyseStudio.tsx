@@ -1030,7 +1030,10 @@ export default function ResultsAnalyseStudio({
     if (zoomMode !== "window") {
       // Auto-engage a sliding window for long trips so the cursor "animates"
       // through a readable zoom rather than a static full-span line.
-      if (tripSpan > 90) {
+      const reduce =
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (!reduce && tripSpan > 90) {
         const w = Math.min(60, Math.max(20, tripSpan * 0.15));
         const start = Math.min(
           Math.max(tMin, highlightT - w * 0.35),

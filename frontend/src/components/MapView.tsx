@@ -380,7 +380,10 @@ function SoftPanToCursor({
     // Only nudge the map when the playhead leaves a comfortable inner frame
     const inner = map.getBounds().pad(-0.2);
     if (!inner.contains(ll)) {
-      map.panTo(ll, { animate: true, duration: 0.22 });
+      const reduce =
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      map.panTo(ll, reduce ? { animate: false } : { animate: true, duration: 0.22 });
     }
   }, [enabled, position, map]);
   return null;

@@ -2580,12 +2580,19 @@ export default function CycleGenShell() {
   }, [playback.playing, playback.s]);
 
   // Opt-in auto-replay (×10): localStorage `cyclegen.autoReplay` = "1", default off.
+  // Skipped when prefers-reduced-motion.
   useEffect(() => {
     if (stage !== "completed" || !playback.ready || !profile) return;
     const optedIn =
       typeof window !== "undefined" &&
       window.localStorage.getItem("cyclegen.autoReplay") === "1";
     if (!optedIn) return;
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
     const key = [
       simulationId ?? "",
       profile.time.length,
