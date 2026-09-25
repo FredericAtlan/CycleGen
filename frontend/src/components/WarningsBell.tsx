@@ -41,9 +41,9 @@ export default function WarningsBell() {
             ? "border-amber-400 bg-amber-100 text-amber-950"
             : "border-amber-200 bg-white text-amber-900 hover:bg-amber-50"
         }`}
-        title="Warnings globaux"
+        title="Alertes globales"
         aria-expanded={panelOpen}
-        aria-label={`${n} warning${n > 1 ? "s" : ""}`}
+        aria-label={`${n} alerte${n > 1 ? "s" : ""}`}
       >
         <svg
           width="14"
@@ -64,11 +64,11 @@ export default function WarningsBell() {
         <div
           className="absolute right-0 top-full z-[1300] mt-1.5 w-[min(92vw,22rem)] rounded-lg border border-amber-200 bg-white shadow-xl"
           role="dialog"
-          aria-label="Warnings globaux"
+          aria-label="Alertes globales"
         >
           <div className="flex items-center justify-between border-b border-amber-100 px-3 py-2">
             <h3 className="text-[11px] font-semibold uppercase tracking-wide text-amber-900">
-              Warnings
+              Alertes
               <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 font-mono text-[10px] tabular-nums normal-case">
                 {n}
               </span>

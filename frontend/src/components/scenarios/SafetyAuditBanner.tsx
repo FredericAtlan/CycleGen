@@ -20,14 +20,14 @@ export default function SafetyAuditBanner({ profile }: SafetyAuditBannerProps) {
 
   return (
     <div
-      className={`rounded-md border px-3 py-2 text-[11px] ${
+      className={`mx-3 mt-1.5 shrink-0 rounded-md border px-3 py-2 text-[11px] ${
         hot
           ? "border-amber-200 bg-amber-50 text-amber-900"
           : "border-slate-200 bg-slate-50 text-slate-700"
       }`}
     >
       <div className="mb-1 font-semibold uppercase tracking-wide text-slate-500">
-        B · Audit sécurité
+        Audit sécurité
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1 tabular-nums">
         {profile.max_abs_accel != null && (

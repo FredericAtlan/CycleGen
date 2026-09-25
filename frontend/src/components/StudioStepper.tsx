@@ -5,8 +5,8 @@ export type StudioWizardStep = 1 | 2 | 3 | 4;
 export const STUDIO_WIZARD_LABELS: Record<StudioWizardStep, string> = {
   1: "Trajet",
   2: "Contraintes",
-  3: "Comportement",
-  4: "Résultats",
+  3: "Conducteur",
+  4: "Cycle",
 };
 
 type StudioStepperProps = {
@@ -15,7 +15,7 @@ type StudioStepperProps = {
   onStepChange: (step: StudioWizardStep) => void;
   /** Return to Studio home / mode picker (with confirm handled by parent). */
   onLeaveToMenu?: () => void;
-  /** When set, only this step is selectable (ex. profil sans GPS → Résultats). */
+  /** When set, only this step is selectable (ex. profil sans GPS → Cycle). */
   lockToStep?: StudioWizardStep;
   /** Cycle title in header (GPS A→B by default, saved name after save). */
   cycleTitle?: string | null;
@@ -30,15 +30,20 @@ export default function StudioStepper({
   cycleTitle = null,
 }: StudioStepperProps) {
   return (
-    <div className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 sm:gap-3">
-      <button
-        type="button"
-        onClick={() => onLeaveToMenu?.()}
-        className="shrink-0 text-[11px] font-semibold text-slate-500 hover:text-slate-800"
-        title="Menu principal — recommencer"
-      >
-        ← Menu
-      </button>
+    <div
+      className="flex h-11 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 sm:gap-3"
+      data-testid="studio-stepper"
+    >
+      {onLeaveToMenu ? (
+        <button
+          type="button"
+          onClick={() => onLeaveToMenu()}
+          className="shrink-0 text-[11px] font-semibold text-slate-500 hover:text-slate-800"
+          title="Accueil — recommencer"
+        >
+          ← Accueil
+        </button>
+      ) : null}
       {cycleTitle ? (
         <div
           className="hidden min-w-0 max-w-[40%] shrink truncate text-[11px] font-semibold tabular-nums text-slate-800 sm:block md:max-w-[46%]"

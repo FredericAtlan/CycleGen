@@ -25,6 +25,10 @@ type ElevationProfileChartProps = {
   /** Fallback L when slope_profile is missing (e.g. UI setting). */
   trapLengthM?: number;
   meta?: ElevationProfileMeta | null;
+  /** Shared playhead / hover cursor along S (m). */
+  highlightS?: number | null;
+  onCursorS?: (s_m: number | null) => void;
+  syncEnabled?: boolean;
 };
 
 type ElevPt = { s_km: number; z_m: number };
@@ -238,6 +242,9 @@ export default function ElevationProfileChart({
   tall = false,
   trapLengthM,
   meta = null,
+  highlightS = null,
+  onCursorS,
+  syncEnabled = true,
 }: ElevationProfileChartProps) {
   const [selectedKm, setSelectedKm] = useState<number | null>(null);
   const [hoverKm, setHoverKm] = useState<number | null>(null);
@@ -657,8 +664,16 @@ export default function ElevationProfileChart({
                   height={layout.plotH + Math.max(stripH, 28)}
                   fill="transparent"
                   className="cursor-pointer"
-                  onMouseEnter={() => setHoverKm(seg.km_index)}
-                  onMouseLeave={() => setHoverKm(null)}
+                  onMouseEnter={() => {
+                    setHoverKm(seg.km_index);
+                    if (syncEnabled && onCursorS) {
+                      onCursorS((seg.s0_m + seg.s1_m) / 2);
+                    }
+                  }}
+                  onMouseLeave={() => {
+                    setHoverKm(null);
+                    if (syncEnabled) onCursorS?.(null);
+                  }}
                   onClick={() => toggleKm(seg.km_index)}
                 >
                   <title>
@@ -731,6 +746,26 @@ export default function ElevationProfileChart({
           >
             altitude (m)
           </text>
+
+          {highlightS != null &&
+            Number.isFinite(highlightS) &&
+            (() => {
+              const sKm = highlightS / 1000;
+              if (sKm < layout.sMin || sKm > layout.sMax) return null;
+              const x = layout.xScale(sKm);
+              return (
+                <line
+                  x1={x}
+                  x2={x}
+                  y1={layout.padT}
+                  y2={layout.padT + layout.plotH}
+                  stroke="#0f172a"
+                  strokeWidth={1.5}
+                  strokeDasharray="4 3"
+                  pointerEvents="none"
+                />
+              );
+            })()}
         </svg>
 
         {!hasBands && (

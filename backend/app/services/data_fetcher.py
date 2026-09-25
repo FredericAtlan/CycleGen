@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import shutil
+import time
 from typing import Any
 from urllib.parse import urlencode
 
@@ -25,7 +26,12 @@ from app.models.schemas import (
     TrafficSignalPoint,
 )
 from app.services.osm_maxspeed import parse_osm_maxspeed_kmh, snap_kmh_to_posted
-from app.services.routing import HereRouter, MapboxRouter, OsrmRouter
+from app.services.routing import (
+    HereRouter,
+    MapboxRouter,
+    OsrmRouter,
+    analyze_multi_router,
+)
 from app.services.secrets_redact import redact_secrets
 
 logger = logging.getLogger(__name__)
@@ -186,6 +192,18 @@ class SpatialDataAcquisition:
         soft_fail: bool = False,
         timeout: httpx.Timeout | None = None,
     ) -> Any:
+        from app.services.connection_log import normalize_provider, record
+
+        provider = normalize_provider(service)
+        t0 = time.perf_counter()
+        record(
+            provider=provider,
+            phase="start",
+            method=method,
+            url=url,
+            params=params,
+            detail=f"Connexion {provider}",
+        )
         req_timeout = timeout or (SOFT_HTTP_TIMEOUT if soft_fail else HTTP_TIMEOUT)
         try:
             resp = await self.client.request(
@@ -203,8 +221,46 @@ class SpatialDataAcquisition:
                     request=resp.request,
                 )
             resp.raise_for_status()
-            return resp.json()
+            data_out = resp.json()
+            elapsed = int((time.perf_counter() - t0) * 1000)
+            size_hint = None
+            try:
+                raw = resp.content
+                if raw is not None:
+                    n = len(raw)
+                    size_hint = (
+                        f"{n} o"
+                        if n < 1024
+                        else f"{n / 1024:.1f} Ko"
+                        if n < 1024 * 1024
+                        else f"{n / (1024 * 1024):.2f} Mo"
+                    )
+            except Exception:  # noqa: BLE001
+                size_hint = None
+            record(
+                provider=provider,
+                phase="ok",
+                method=method,
+                url=url,
+                params=params,
+                status=resp.status_code,
+                duration_ms=elapsed,
+                bytes_hint=size_hint,
+                detail=f"Réponse {provider}",
+            )
+            return data_out
         except httpx.HTTPStatusError as exc:
+            elapsed = int((time.perf_counter() - t0) * 1000)
+            record(
+                provider=provider,
+                phase="error",
+                method=method,
+                url=url,
+                params=params,
+                status=exc.response.status_code,
+                duration_ms=elapsed,
+                detail=f"HTTP {exc.response.status_code}",
+            )
             if soft_fail:
                 logger.warning("%s soft-fail HTTP %s", service, exc.response.status_code)
                 return {}
@@ -215,6 +271,16 @@ class SpatialDataAcquisition:
         except (httpx.RequestError, ValueError) as exc:
             # Soft optional services: never chain into curl (can hang minutes).
             if soft_fail:
+                elapsed = int((time.perf_counter() - t0) * 1000)
+                record(
+                    provider=provider,
+                    phase="error",
+                    method=method,
+                    url=url,
+                    params=params,
+                    duration_ms=elapsed,
+                    detail=f"soft-fail {type(exc).__name__}",
+                )
                 logger.warning(
                     "%s soft-fail (%s) — skipping curl fallback",
                     service,
@@ -222,11 +288,43 @@ class SpatialDataAcquisition:
                 )
                 return {}
             logger.warning("%s httpx failed (%s); trying curl fallback", service, type(exc).__name__)
+            record(
+                provider=provider,
+                phase="info",
+                method=method,
+                url=url,
+                params=params,
+                detail="httpx échec → fallback curl",
+            )
             try:
-                return await _curl_json(
+                data_out = await _curl_json(
                     method, url, params=params, data=data, json_body=json_body
                 )
+                elapsed = int((time.perf_counter() - t0) * 1000)
+                record(
+                    provider=provider,
+                    phase="ok",
+                    method=method,
+                    url=url,
+                    params=params,
+                    status="curl",
+                    duration_ms=elapsed,
+                    detail=f"Réponse {provider} (curl)",
+                )
+                return data_out
             except Exception as curl_exc:  # noqa: BLE001
+                elapsed = int((time.perf_counter() - t0) * 1000)
+                record(
+                    provider=provider,
+                    phase="error",
+                    method=method,
+                    url=url,
+                    params=params,
+                    duration_ms=elapsed,
+                    detail=(
+                        f"{redact_secrets(exc)} (curl: {redact_secrets(curl_exc)})"
+                    ),
+                )
                 raise HTTPException(
                     status_code=502,
                     detail=(
@@ -249,59 +347,81 @@ class SpatialDataAcquisition:
         depart_at=None,
         a_y_mps2: float = 2.5,
         routing_profile: RoutingProfile | str | None = None,
+        routing_profiles: list[RoutingProfile | str] | None = None,
     ) -> RouteAnalyzeResponse:
         from datetime import datetime, timezone
 
         owns = self._client is None
         if owns:
             self._client = httpx.AsyncClient(timeout=HTTP_TIMEOUT)
+        from app.services.connection_log import (
+            begin_connection_log,
+            clear_connection_log,
+            get_connection_log,
+            record,
+        )
+
+        begin_connection_log()
         try:
             if depart_at is None:
                 depart_at = datetime.now(timezone.utc)
 
-            profile = routing_profile
-            if isinstance(profile, str):
-                try:
-                    profile = RoutingProfile(profile)
-                except ValueError:
-                    profile = RoutingProfile.MAPBOX_TRAFFIC
-            if profile is None:
-                profile = RoutingProfile.MAPBOX_TRAFFIC
+            def _normalize_profiles(
+                explicit: list[RoutingProfile | str] | None,
+                singular: RoutingProfile | str | None,
+            ) -> list[RoutingProfile]:
+                seen: set[RoutingProfile] = set()
+                out: list[RoutingProfile] = []
+                candidates: list[RoutingProfile | str] = []
+                if explicit:
+                    candidates.extend(explicit)
+                if singular is not None:
+                    candidates.append(singular)
+                for raw in candidates:
+                    if raw is None:
+                        continue
+                    prof: RoutingProfile
+                    if isinstance(raw, RoutingProfile):
+                        prof = raw
+                    else:
+                        try:
+                            prof = RoutingProfile(raw)
+                        except ValueError:
+                            continue
+                    if prof in seen:
+                        continue
+                    seen.add(prof)
+                    out.append(prof)
+                return out
 
-            osrm = OsrmRouter(
-                base_url=self.osrm_base_url,
-                client=self.client,
-                request_json=self._request_json,
-            )
-            if profile == RoutingProfile.HERE_ADAS:
-                traffic = await HereRouter(
-                    client=self.client,
-                    request_json=self._request_json,
-                ).route(
-                    (lat_a, lon_a),
-                    (lat_b, lon_b),
-                    vias=vias,
-                    depart_at=depart_at,
-                )
-            elif profile == RoutingProfile.CAR_OSRM:
-                traffic = await osrm.route(
-                    (lat_a, lon_a),
-                    (lat_b, lon_b),
-                    vias=vias,
-                    depart_at=depart_at,
+            profiles = _normalize_profiles(routing_profiles, routing_profile)
+            if profiles:
+                record(
+                    provider="CycleGen",
+                    phase="info",
+                    detail=(
+                        "Routeurs demandés : "
+                        + " → ".join(p.value for p in profiles)
+                    ),
                 )
             else:
-                mapbox = MapboxRouter(
-                    client=self.client,
-                    request_json=self._request_json,
-                    fallback=osrm,
+                record(
+                    provider="CycleGen",
+                    phase="info",
+                    detail="Aucun routeur UI — chaîne défaut HERE → Mapbox → OSRM",
                 )
-                traffic = await mapbox.route(
-                    (lat_a, lon_a),
-                    (lat_b, lon_b),
-                    vias=vias,
-                    depart_at=depart_at,
-                )
+
+            multi = await analyze_multi_router(
+                start=(lat_a, lon_a),
+                end=(lat_b, lon_b),
+                vias=vias,
+                depart_at=depart_at,
+                requested_profiles=profiles or None,
+                client=self.client,
+                request_json=self._request_json,
+                osrm_base_url=self.osrm_base_url,
+            )
+            traffic = multi.primary
 
             coords = [[p.lat, p.lon] for p in traffic.geometry]
             if not coords:
@@ -343,23 +463,27 @@ class SpatialDataAcquisition:
                 )
                 speed_limits = []
 
-            elevation_source: str | None = None
-            here_elev = getattr(traffic, "elevations_m", None)
+            # Elevation sources: HERE if it delivered a usable Z, otherwise DEM.
+            elevations_by_source: dict[str, list[float]] = {
+                k: list(v) for k, v in multi.elevations_by_source.items() if v
+            }
+            here_elev = elevations_by_source.get("here")
             if (
                 here_elev
                 and len(here_elev) == len(coords)
-                and any(
-                    e is not None and float(e) != 0.0
-                    for e in here_elev
-                )
+                and any(e != 0.0 for e in here_elev)
             ):
-                elevations = [float(e) for e in here_elev]
+                elevations = list(here_elev)
                 elevation_source = "here"
             else:
                 elevations = await self._fetch_elevations(coords)
                 elevation_source = "dem"
+                if any(e != 0.0 for e in elevations):
+                    # Tag by the concrete provider when we know it (Open-Meteo
+                    # always first in the fallback chain).
+                    elevations_by_source.setdefault("open-meteo", list(elevations))
 
-            warnings = list(traffic.warnings)
+            warnings = list(multi.warnings)
             if not any(e != 0.0 for e in elevations):
                 warnings.append(
                     CycleGenWarning(
@@ -393,8 +517,19 @@ class SpatialDataAcquisition:
                 depart_at=depart_at,
                 elevation_source=elevation_source,
                 a_y_mps2=a_y_mps2,
+                routers_used=list(multi.routers_used),
+                segment_speeds_by_router={
+                    k: list(v) for k, v in multi.legal_by_router.items()
+                },
+                segment_traffic_speeds_by_router={
+                    k: list(v) for k, v in multi.traffic_by_router.items()
+                },
+                elevations_by_source=elevations_by_source,
+                router_status=dict(multi.router_status),
+                connection_log=[e.to_dict() for e in get_connection_log()],
             )
         finally:
+            clear_connection_log()
             if owns and self._client is not None:
                 await self._client.aclose()
                 self._client = None

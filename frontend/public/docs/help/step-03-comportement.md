@@ -1,4 +1,4 @@
-# Étape 3 — Comportement
+# Étape 3 — Conducteur
 
 > Objectif : choisir **comment** le véhicule suit l’enveloppe (moteur + conducteur + véhicule), puis **générer** le cycle \(v(t)\).
 
@@ -6,16 +6,20 @@
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│  SIDEBAR · Comportement                                     │
+│  SIDEBAR · Conducteur                                     │
 │                                                             │
+│  ┌─ Vmax · Virage · Bruit ─────────────────────────────┐   │
+│  │ Vmax véhicule (km/h)                                │   │
+│  │ Latéral en virage a_y (m/s²) — V_curve ∝ √a_y       │   │
+│  │ Bruit stochastique Markov (IDM)                     │   │
+│  └─────────────────────────────────────────────────────┘   │
 │  ┌─ Moteur ────────────┐  IDM (défaut) | SUMO               │
 │  └─────────────────────┘                                    │
 │  ┌─ Conducteur ────────────────────────────────────────┐   │
 │  │ Profil Eco / Normal / Agressif / Sportif            │   │
 │  │ a_max, b_comf, speed_factor (ou % Sportif)          │   │
-│  │ a_y latéral (virages) — reconstruit V_curve         │   │
-│  │ Vmax véhicule                                       │   │
-│  │ Zones conducteur (optionnel, par tronçons de S)     │   │
+│  └─────────────────────────────────────────────────────┘   │
+│  ┌─ Zones conducteur (optionnel, par tronçons de S) ──┐   │
 │  └─────────────────────────────────────────────────────┘   │
 │  ┌─ Véhicule ──────────────────────────────────────────┐   │
 │  │ masse, F0/F1/F2, r_dyn → P / couple (analyse)       │   │
@@ -224,4 +228,4 @@ Tronçons \([s_0, s_1)\) avec physique locale (`a_max`, `b_comf`, `speed_factor`
 
 ## Suite
 
-Profil consolidé → **Résultats** : graphiques, mécanique, export Excel/CSV, Versus.
+Profil consolidé → **Cycle** : graphiques, mécanique, export Excel/CSV, Versus.

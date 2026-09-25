@@ -467,6 +467,51 @@ export function importSavedCyclesJson(raw: string): {
   return { imported, total: next.length };
 }
 
+const XSPACE_SEED_FLAG = "cyclegen.xspaceAvlSeed.v1";
+
+/**
+ * Fetch /data/xspace_avl_seed_cycles.json once and merge into the local library.
+ * Idempotent — skips if flag set and all 6 ids already present.
+ */
+export async function ensureXspaceAvlSeedCycles(): Promise<{
+  imported: number;
+  total: number;
+  skipped: boolean;
+}> {
+  if (typeof window === "undefined") {
+    return { imported: 0, total: 0, skipped: true };
+  }
+  const expected = [
+    "xspace_avl_iseran_prudent",
+    "xspace_avl_iseran_dynamique",
+    "xspace_avl_veleta_prudent",
+    "xspace_avl_veleta_dynamique",
+    "xspace_avl_stelvio_prudent",
+    "xspace_avl_stelvio_dynamique",
+  ];
+  const existing = new Set(readAll().map((c) => c.id));
+  const missing = expected.filter((id) => !existing.has(id));
+  if (!missing.length && localStorage.getItem(XSPACE_SEED_FLAG) === "1") {
+    return { imported: 0, total: readAll().length, skipped: true };
+  }
+  try {
+    const res = await fetch("/data/xspace_avl_seed_cycles.json", {
+      cache: "no-cache",
+    });
+    if (!res.ok) {
+      return { imported: 0, total: readAll().length, skipped: true };
+    }
+    const text = await res.text();
+    const { imported, total } = importSavedCyclesJson(text);
+    if (imported > 0) {
+      localStorage.setItem(XSPACE_SEED_FLAG, "1");
+    }
+    return { imported, total, skipped: false };
+  } catch {
+    return { imported: 0, total: readAll().length, skipped: true };
+  }
+}
+
 export function listSavedCycles(): SavedCycle[] {
   return readAll();
 }
@@ -1219,7 +1264,9 @@ export function seedStudioSessionFromCycle(
     meta?.driverProfile === "Eco" ||
     meta?.driverProfile === "Normal" ||
     meta?.driverProfile === "Agressif" ||
-    meta?.driverProfile === "Sportif"
+    meta?.driverProfile === "Sportif" ||
+    meta?.driverProfile === "Prudent" ||
+    meta?.driverProfile === "Dynamique"
   ) {
     driverProfile = meta.driverProfile;
   }

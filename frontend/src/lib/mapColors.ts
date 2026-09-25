@@ -1,5 +1,31 @@
 /** Map slope coloring shared by studio map and Excel vignettes. */
 
+export type SlopePathOptions = {
+  color: string;
+  weight: number;
+  dashArray?: string;
+  opacity: number;
+};
+
+/**
+ * Map slope α (rad) → color (secondary) + weight/dash (primary a11y channels).
+ * - Downhill: dashed stroke
+ * - Uphill: solid stroke
+ * - |grade|: stroke weight 3…8
+ * Color remains a hint (green↓ amber flat red↑) but is not the only channel.
+ */
+export function alphaToPathOptions(alphaRad: number): SlopePathOptions {
+  const pct = Math.tan(alphaRad) * 100;
+  const color = alphaToColor(alphaRad);
+  const mag = Math.min(8, Math.abs(pct));
+  const weight = 3 + (mag / 8) * 5;
+  let dashArray: string | undefined;
+  if (pct < -0.5) dashArray = "10 6";
+  else if (pct > 0.5) dashArray = undefined;
+  else dashArray = "2 5";
+  return { color, weight, dashArray, opacity: 0.92 };
+}
+
 /** Map slope α (rad) → color: green downhill → amber flat → red uphill. */
 export function alphaToColor(alphaRad: number): string {
   const pct = Math.tan(alphaRad) * 100;

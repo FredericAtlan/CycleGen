@@ -1,48 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type {
   CycleGenWarning,
   DriverProfile,
+  RouterKey,
   RoutingProfile,
   SimEngine,
   SpatialCorridor,
 } from "@/lib/types";
+import { ROUTER_LABELS, ROUTER_TO_PROFILE } from "@/lib/types";
 import type { DriverPhysics } from "@/lib/driverPresets";
 import type { WaypointDraft } from "@/lib/types";
 import type { EnvelopeMask } from "@/lib/corridorEdit";
 import { withUpdatedFeux } from "@/lib/corridorEdit";
-import {
-  MAX_GRADE_OPTIONS,
-  MAX_GRADE_PCT_MAX,
-  MAX_GRADE_PCT_MIN,
-  SLOPE_SMOOTH_PRESETS,
-  TRAP_LENGTH_M_MAX,
-  TRAP_LENGTH_M_MIN,
-  TRAP_LENGTH_OPTIONS,
-  gradeToPct,
-  normalizeSlopeAlgo,
-  pctToGrade,
-  slopeAlgoEqual,
-  type SlopeAlgoOptions,
-  type SlopeSmoothPreset,
-} from "@/lib/slopeAlgo";
-import {
-  LEGAL_MIN_RUN_M_MAX,
-  LEGAL_MIN_RUN_M_MIN,
-  LEGAL_MIN_RUN_OPTIONS_M,
-  LEGAL_SMOOTH_MODES,
-  LEGAL_WINDOW_M_MAX,
-  LEGAL_WINDOW_M_MIN,
-  LEGAL_WINDOW_OPTIONS_M,
-  legalFilterKey,
-  normalizeLegalFilter,
-  type LegalFilterOptions,
-} from "@/lib/legalFilter";
-import EnvelopeMaskToggles from "@/components/corridor/EnvelopeMaskToggles";
-import SpeedLimitChart from "@/components/corridor/SpeedLimitChart";
+import type { SlopeAlgoOptions } from "@/lib/slopeAlgo";
+import type { LegalFilterOptions } from "@/lib/legalFilter";
 import SpeedEnvelopeTimeChart from "@/components/corridor/SpeedEnvelopeTimeChart";
-import SlopeChart from "@/components/corridor/SlopeChart";
 import SimParamsPanel from "@/components/SimParamsPanel";
 import DriverZonesEditor from "@/components/DriverZonesEditor";
 import VehiclePanel from "@/components/VehiclePanel";
@@ -58,8 +32,6 @@ import WarningsPanel, {
 } from "@/components/WarningsPanel";
 import AccordionSection from "@/components/AccordionSection";
 import TrafficLightsEditor from "@/components/corridor/TrafficLightsEditor";
-import SlopeUnitToggle from "@/components/SlopeUnitToggle";
-import ElevationProfileChart from "@/components/corridor/ElevationProfileChart";
 import DownloadButtons from "@/components/export/DownloadButtons";
 import SaveCycleButton from "@/components/SaveCycleButton";
 import {
@@ -72,7 +44,7 @@ import {
 import type { StudioWizardStep } from "@/components/StudioStepper";
 import type { ConsolidatedProfile } from "@/lib/types";
 import { computeCycleStats } from "@/lib/cycleMetrics";
-import { slopeExtremes, slopeUnitLabel, type SlopeUnit } from "@/lib/units";
+import type { SlopeUnit } from "@/lib/units";
 import BuildProgressGauge, {
   type BuildPhase,
 } from "@/components/BuildProgressGauge";
@@ -102,6 +74,13 @@ type SidebarProps = {
   geocodingWaypointId: string | null;
   routingProfile: RoutingProfile | string;
   onRoutingProfileChange: (value: string) => void;
+  /** Multi-router selection (Trajet). If empty, fallback to routingProfile. */
+  routingProfiles?: RoutingProfile[];
+  onRoutingProfilesChange?: (next: RoutingProfile[]) => void;
+  /** Availability hints for router checkboxes (env keys). */
+  routerAvailability?: Partial<Record<RouterKey, boolean>>;
+  /** Status per router after last analyze ('ok' | 'skipped:no_key' | 'error:...'). */
+  routerStatus?: Partial<Record<RouterKey, string>>;
   departAt: string;
   onDepartAtChange: (value: string) => void;
   aY: number;
@@ -237,6 +216,10 @@ export default function Sidebar({
   geocodingWaypointId,
   routingProfile,
   onRoutingProfileChange,
+  routingProfiles = [],
+  onRoutingProfilesChange,
+  routerAvailability,
+  routerStatus,
   departAt,
   onDepartAtChange,
   aY,
@@ -299,76 +282,6 @@ export default function Sidebar({
 }: SidebarProps) {
   const trafficLabel = trafficSourceLabel(trafficSource);
   const [selectedFeu, setSelectedFeu] = useState<number | null>(null);
-  const [slopeDraft, setSlopeDraft] = useState<SlopeAlgoOptions | null>(
-    () => (slopeAlgo ? normalizeSlopeAlgo(slopeAlgo) : null)
-  );
-  const [legalDraft, setLegalDraft] = useState<LegalFilterOptions | null>(
-    () => (legalFilter ? normalizeLegalFilter(legalFilter) : null)
-  );
-
-  useEffect(() => {
-    if (slopeAlgo) setSlopeDraft(normalizeSlopeAlgo(slopeAlgo));
-  }, [slopeAlgo]);
-
-  useEffect(() => {
-    if (legalFilter) setLegalDraft(normalizeLegalFilter(legalFilter));
-  }, [legalFilter]);
-
-  const slopeDirty =
-    !!slopeDraft &&
-    !!slopeAlgo &&
-    !slopeAlgoEqual(slopeDraft, slopeAlgo);
-  const legalDirty =
-    !!legalDraft &&
-    !!legalFilter &&
-    legalFilterKey(legalDraft) !== legalFilterKey(legalFilter);
-
-  const slopeSummary = useMemo(() => {
-    if (!corridor?.alpha?.length) {
-      if (
-        slopeAlgo?.alphaMinPct != null ||
-        slopeAlgo?.alphaMaxPct != null
-      ) {
-        return `imposées ${slopeAlgo.alphaMinPct ?? "∅"}…${slopeAlgo.alphaMaxPct ?? "∅"} %`;
-      }
-      return "MNT après construction du cycle";
-    }
-    const ext = slopeExtremes(corridor.alpha, slopeUnit);
-    if (!ext) return "MNT après construction du cycle";
-    const u = slopeUnitLabel(slopeUnit);
-    const d = slopeUnit === "percent" ? 1 : slopeUnit === "deg" ? 2 : 4;
-    const clip =
-      slopeAlgo?.alphaMinPct != null || slopeAlgo?.alphaMaxPct != null
-        ? ` · clip ${slopeAlgo?.alphaMinPct ?? "∅"}…${slopeAlgo?.alphaMaxPct ?? "∅"} %`
-        : "";
-    return `min ${ext.min.toFixed(d)} · max ${ext.max.toFixed(d)} ${u}${clip}`;
-  }, [corridor, slopeUnit, slopeAlgo]);
-
-  const corridorSlopeExt = useMemo(
-    () => slopeExtremes(corridor?.alpha, slopeUnit),
-    [corridor, slopeUnit]
-  );
-
-  const elevStats = useMemo(() => {
-    const fromCorr = corridor?.elevations_m;
-    const src =
-      fromCorr && fromCorr.length > 1
-        ? fromCorr
-        : routeElevationsM && routeElevationsM.length > 1
-          ? routeElevationsM
-          : null;
-    if (!src) return null;
-    let min = Infinity;
-    let max = -Infinity;
-    for (const z of src) {
-      if (!Number.isFinite(z)) continue;
-      if (z < min) min = z;
-      if (z > max) max = z;
-    }
-    if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
-    const corrected = !!(fromCorr && fromCorr.length > 1);
-    return { min, max, delta: max - min, corrected };
-  }, [corridor?.elevations_m, routeElevationsM]);
 
   const kpis = useMemo(() => {
     if (!profile || profile.time.length < 2) return null;
@@ -386,7 +299,10 @@ export default function Sidebar({
   const routeLabel = `${departureLabel} → ${destinationLabel}`;
 
   return (
-    <aside className="flex h-full w-80 shrink-0 flex-col border-r border-slate-200 bg-white">
+    <aside
+      data-testid="studio-sidebar"
+      className="flex h-full w-80 shrink-0 flex-col border-r border-slate-200 bg-white"
+    >
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
         {activeStep === 1 && (
           <div className="flex flex-col gap-3">
@@ -587,22 +503,85 @@ export default function Sidebar({
                   </div>
                 )}
 
-                <label className="block space-y-1">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700">
-                    <RouterIcon className="h-3.5 w-3.5 text-slate-500" />
-                    Routeur
-                  </span>
-                  <select
-                    value={routingProfile}
-                    onChange={(e) => onRoutingProfileChange(e.target.value)}
-                    disabled={paramsDisabled}
-                    className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand focus:ring-1 focus:ring-brand disabled:opacity-60"
-                  >
-                    <option value="HERE/ADAS">HERE / ADAS</option>
-                    <option value="Mapbox/Traffic">Mapbox / Traffic</option>
-                    <option value="Car/OSRM">Voiture / OSRM</option>
-                  </select>
-                </label>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700">
+                      <RouterIcon className="h-3.5 w-3.5 text-slate-500" />
+                      Routeurs (multi)
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      HERE + secours
+                    </span>
+                  </div>
+                  <ul className="flex flex-col gap-1 rounded-md border border-slate-200 bg-slate-50/80 p-2">
+                    {(["here", "mapbox", "osrm"] as RouterKey[]).map(
+                      (key) => {
+                        const profile = ROUTER_TO_PROFILE[key];
+                        const rawStatus = routerStatus?.[key];
+                        const configuredKnown =
+                          routerAvailability?.[key] !== undefined;
+                        const configured = configuredKnown
+                          ? routerAvailability?.[key] === true
+                          : true;
+                        const checked = onRoutingProfilesChange
+                          ? routingProfiles.includes(profile)
+                          : routingProfile === profile;
+                        const badge = rawStatus
+                          ? rawStatus === "ok"
+                            ? { label: "OK", cls: "bg-emerald-500/10 text-emerald-700" }
+                            : rawStatus.startsWith("skipped")
+                              ? { label: "clé absente", cls: "bg-amber-500/10 text-amber-700" }
+                              : rawStatus.startsWith("error")
+                                ? { label: "erreur", cls: "bg-rose-500/10 text-rose-700" }
+                                : { label: rawStatus, cls: "bg-slate-400/10 text-slate-500" }
+                          : configuredKnown && !configured
+                            ? { label: "clé absente", cls: "bg-amber-500/10 text-amber-700" }
+                            : null;
+                        return (
+                          <li
+                            key={key}
+                            className="flex items-center justify-between"
+                          >
+                            <label
+                              className={`inline-flex items-center gap-2 text-[11px] font-medium text-slate-700 ${paramsDisabled || !configured ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+                            >
+                              <input
+                                type="checkbox"
+                                className="h-3.5 w-3.5 accent-brand"
+                                checked={checked}
+                                disabled={paramsDisabled || !configured}
+                                onChange={(e) => {
+                                  if (onRoutingProfilesChange) {
+                                    const next = new Set(routingProfiles);
+                                    if (e.target.checked) next.add(profile);
+                                    else next.delete(profile);
+                                    onRoutingProfilesChange(Array.from(next));
+                                  }
+                                  // Backward compat: keep singular in sync w/ first checked.
+                                  onRoutingProfileChange(profile);
+                                }}
+                              />
+                              <span>{ROUTER_LABELS[key]}</span>
+                            </label>
+                            {badge && (
+                              <span
+                                title={rawStatus ?? undefined}
+                                className={`ml-2 inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${badge.cls}`}
+                              >
+                                {badge.label}
+                              </span>
+                            )}
+                          </li>
+                        );
+                      }
+                    )}
+                  </ul>
+                  <p className="text-[10px] leading-snug text-slate-500">
+                    Par défaut : HERE uniquement. Si HERE échoue → Mapbox →
+                    OSRM. Cocher plusieurs routeurs active le multi-compare
+                    (projection nearest-S) dans Contraintes.
+                  </p>
+                </div>
 
                 {onApplyHomologationPreset && (
                   <button
@@ -643,86 +622,14 @@ export default function Sidebar({
               </div>
             </AccordionSection>
 
-            {envelopeMask && onEnvelopeMaskChange ? (
-              <AccordionSection
-                title="Mode de conduite"
-                summary={`${
-                  envelopeMask.legal ? "Limites ON" : "Limites OFF"
-                } · Vmax ${maxSpeedKmh ?? "—"} · Markov ${
-                  enableMarkov ? "ON" : "OFF"
-                }`}
-                defaultOpen
-              >
-                <div className="space-y-3">
-                  <label className="flex items-center justify-between gap-3 text-xs font-medium text-slate-700">
-                    <span>Respecter les limites de vitesse</span>
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-brand"
-                      checked={envelopeMask.legal}
-                      disabled={paramsDisabled}
-                      onChange={(e) =>
-                        onEnvelopeMaskChange({
-                          ...envelopeMask,
-                          legal: e.target.checked,
-                        })
-                      }
-                    />
-                  </label>
-                  <label className="block space-y-1">
-                    <span className="text-xs font-medium text-slate-700">
-                      Vitesse Max Véhicule (km/h)
-                    </span>
-                    <input
-                      type="number"
-                      min={30}
-                      max={300}
-                      step={5}
-                      value={maxSpeedKmh ?? 130}
-                      disabled={paramsDisabled}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        onMaxSpeedKmhChange(
-                          Number.isFinite(v) ? Math.max(30, v) : 130
-                        );
-                      }}
-                      className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand focus:ring-1 focus:ring-brand disabled:opacity-60"
-                    />
-                  </label>
-                  <label className="flex items-center justify-between gap-3 text-xs font-medium text-slate-700">
-                    <span>Inclure congestion (V_traffic)</span>
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-brand"
-                      checked={envelopeMask.traffic}
-                      disabled={paramsDisabled}
-                      onChange={(e) =>
-                        onEnvelopeMaskChange({
-                          ...envelopeMask,
-                          traffic: e.target.checked,
-                        })
-                      }
-                    />
-                  </label>
-                  <label className="flex items-center justify-between gap-3 text-xs font-medium text-slate-700">
-                    <span>Bruit stochastique du trafic (Markov)</span>
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-brand"
-                      checked={enableMarkov}
-                      disabled={paramsDisabled || !onEnableMarkovChange}
-                      onChange={(e) =>
-                        onEnableMarkovChange?.(e.target.checked)
-                      }
-                    />
-                  </label>
-                  <p className="text-[10px] leading-snug text-slate-500">
-                    Homologation AVL-like : limites ON, V_traffic OFF, Markov
-                    OFF. Le freinage enveloppe / feux reste actif.
-                  </p>
-                </div>
-              </AccordionSection>
-            ) : null}
+            {/* Mode de conduite migré : Vmax + Markov → Conducteur (step 3),
+                Respecter limites + V min/max → Contraintes (step 2). */}
+            <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-snug text-slate-600">
+              Vmax véhicule, virage (a_y) et Markov se règlent dans{" "}
+              <span className="font-semibold">Conducteur</span>. Le respect
+              des limites, les sources de vitesse / pente et les V/α min-max
+              se règlent dans <span className="font-semibold">Contraintes</span>.
+            </p>
 
             {(onExportCorridorProfile || onImportCorridorProfile) && (
               <AccordionSection
@@ -796,555 +703,14 @@ export default function Sidebar({
 
         {activeStep === 2 && (
           <div className="flex flex-col gap-3">
-            {/* 1–2. Régler d’abord — puis voir l’impact sur le profil */}
-
-            <AccordionSection
-              title="Vitesses"
-              summary={`${
-                envelopeMask
-                  ? [
-                      envelopeMask.legal ? "légal" : null,
-                      envelopeMask.traffic ? "trafic" : null,
-                      envelopeMask.curve ? "virage" : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" ∩ ") || "Vmax seule"
-                  : "—"
-              } · Vmax ${maxSpeedKmh ?? "—"}`}
-              defaultOpen
-            >
-              <div className="space-y-3 p-1">
-                <p className="text-[11px] leading-snug text-slate-500">
-                  1) Coche les composantes routeur / géométrie · 2) Applique le
-                  filtre spatial sur V_legal · 3) Lis l’impact live sur les
-                  graphiques (s et t).
-                </p>
-
-                {envelopeMask && onEnvelopeMaskChange ? (
-                  <EnvelopeMaskToggles
-                    mask={envelopeMask}
-                    onChange={onEnvelopeMaskChange}
-                    disabled={paramsDisabled}
-                    trafficSource={trafficSource}
-                    allowEmpty
-                  />
-                ) : (
-                  <p className="rounded-md border border-dashed border-slate-200 px-3 py-2 text-[11px] text-slate-400">
-                    Sources après analyse d’itinéraire.
-                  </p>
-                )}
-
-                <label className="block space-y-1">
-                  <span className="text-xs font-medium text-slate-700">
-                    Vitesse Max Véhicule (km/h) — borne live
-                  </span>
-                  <input
-                    type="number"
-                    min={30}
-                    max={300}
-                    step={5}
-                    value={maxSpeedKmh ?? 130}
-                    disabled={paramsDisabled}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      onMaxSpeedKmhChange(
-                        Number.isFinite(v) ? Math.max(30, v) : 130
-                      );
-                    }}
-                    className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand focus:ring-1 focus:ring-brand disabled:opacity-60"
-                  />
-                </label>
-
-                {onLegalFilterChange && legalFilter && legalDraft ? (
-                  <div className="space-y-2 rounded-md border border-slate-200 bg-white p-2.5">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                      Processeur spatial — V_legal
-                    </p>
-                    <div className="grid grid-cols-2 gap-1">
-                      {LEGAL_SMOOTH_MODES.map((m) => (
-                        <button
-                          key={m.id}
-                          type="button"
-                          title={m.hint}
-                          disabled={paramsDisabled}
-                          onClick={() =>
-                            setLegalDraft({ ...legalDraft, mode: m.id })
-                          }
-                          className={`rounded-md border px-2 py-1.5 text-left transition disabled:opacity-50 ${
-                            legalDraft.mode === m.id
-                              ? "border-slate-900 bg-slate-900 text-white"
-                              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                          }`}
-                        >
-                          <span className="block text-[11px] font-semibold">
-                            {m.label}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {LEGAL_WINDOW_OPTIONS_M.map((w) => (
-                        <button
-                          key={w}
-                          type="button"
-                          disabled={
-                            paramsDisabled || legalDraft.mode === "none"
-                          }
-                          onClick={() =>
-                            setLegalDraft({ ...legalDraft, windowM: w })
-                          }
-                          className={`rounded-md px-2 py-1 text-[11px] font-semibold transition disabled:opacity-50 ${
-                            legalDraft.windowM === w
-                              ? "bg-slate-900 text-white"
-                              : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                          }`}
-                        >
-                          W {w} m
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={paramsDisabled || !legalDirty}
-                        onClick={() =>
-                          onLegalFilterChange(normalizeLegalFilter(legalDraft))
-                        }
-                        className="rounded-md bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        Appliquer le filtre
-                      </button>
-                      {legalDirty ? (
-                        <button
-                          type="button"
-                          disabled={paramsDisabled}
-                          onClick={() =>
-                            setLegalDraft(normalizeLegalFilter(legalFilter))
-                          }
-                          className="text-[11px] font-medium text-slate-500 underline-offset-2 hover:underline"
-                        >
-                          Annuler
-                        </button>
-                      ) : (
-                        <span className="text-[10px] text-slate-400">
-                          Sync corridor
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ) : null}
-
-                {corridor && corridor.S.length > 1 ? (
-                  <div className="space-y-3">
-                    <SpeedLimitChart
-                      corridor={corridor}
-                      envelopeMask={envelopeMask}
-                      speedFactor={physics.speed_factor}
-                      maxSpeedKmh={maxSpeedKmh}
-                      onCursorS={onCursorS}
-                      onBrushRangeS={onBrushRangeS}
-                    />
-                    <SpeedEnvelopeTimeChart
-                      corridor={corridor}
-                      envelopeMask={envelopeMask}
-                      speedFactor={physics.speed_factor}
-                      maxSpeedKmh={maxSpeedKmh}
-                    />
-                  </div>
-                ) : (
-                  <p className="rounded-md border border-dashed border-slate-200 px-3 py-2 text-[11px] text-slate-500">
-                    Construisez le cycle pour voir V(s) et V(t) avec toutes les
-                    limites.
-                  </p>
-                )}
-              </div>
-            </AccordionSection>
-
-            {onSlopeAlgoChange && slopeAlgo && slopeDraft && (
-              <AccordionSection
-                title="Pente — processeur spatial"
-                summary={`${
-                  SLOPE_SMOOTH_PRESETS.find(
-                    (x) =>
-                      x.id === (slopeDirty ? slopeDraft : slopeAlgo)
-                        .smoothPreset
-                  )?.label ?? "—"
-                } · L=${(slopeDirty ? slopeDraft : slopeAlgo).trapLengthM} m${
-                  slopeDirty ? " · brouillon" : ""
-                }`}
-                defaultOpen
-              >
-                <div className="space-y-3 p-1">
-                  <p className="text-[11px] leading-snug text-slate-500">
-                    Réglages en brouillon — la reconstruction attend{" "}
-                    <span className="font-semibold text-slate-700">
-                      Appliquer
-                    </span>{" "}
-                    (ou ~2,5 s d’inactivité). Cible AVL N90 BSM→Albertville :
-                    Z±125 m, trapèzes 50 m, grades ≈ −7…+7 %.
-                  </p>
-
-                  <div>
-                    <p className="mb-1 text-[11px] font-medium text-slate-600">
-                      Profil de lissage (altitude DEM)
-                    </p>
-                    <div className="grid grid-cols-2 gap-1">
-                      {SLOPE_SMOOTH_PRESETS.map((p) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          title={p.hint}
-                          disabled={paramsDisabled}
-                          onClick={() =>
-                            setSlopeDraft({
-                              ...slopeDraft,
-                              smoothPreset: p.id as SlopeSmoothPreset,
-                              trapLengthM:
-                                p.suggestedTrapLengthM ??
-                                slopeDraft.trapLengthM,
-                            })
-                          }
-                          className={`rounded-md border px-2 py-1.5 text-left transition disabled:opacity-50 ${
-                            slopeDraft.smoothPreset === p.id
-                              ? "border-slate-900 bg-slate-900 text-white"
-                              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                          }`}
-                        >
-                          <span className="block text-[11px] font-semibold">
-                            {p.label}
-                          </span>
-                          <span
-                            className={`block text-[9px] tabular-nums ${
-                              slopeDraft.smoothPreset === p.id
-                                ? "text-slate-300"
-                                : "text-slate-400"
-                            }`}
-                          >
-                            {p.valueLabel}
-                            {p.suggestedTrapLengthM
-                              ? ` · L ${p.suggestedTrapLengthM} m`
-                              : ""}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="mb-1 text-[11px] font-medium text-slate-600">
-                      Trapèzes de pente (L)
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      {TRAP_LENGTH_OPTIONS.map((opt) => (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          title={opt.hint}
-                          disabled={paramsDisabled}
-                          onClick={() =>
-                            setSlopeDraft({
-                              ...slopeDraft,
-                              trapLengthM: opt.value,
-                            })
-                          }
-                          className={`rounded-md px-2 py-1 text-[11px] font-semibold transition disabled:opacity-50 ${
-                            slopeDraft.trapLengthM === opt.value
-                              ? "bg-slate-900 text-white"
-                              : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                    <label className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-600">
-                      L
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        min={TRAP_LENGTH_M_MIN}
-                        max={TRAP_LENGTH_M_MAX}
-                        step={5}
-                        disabled={paramsDisabled}
-                        value={slopeDraft.trapLengthM}
-                        onChange={(e) => {
-                          const n = parseFloat(e.target.value);
-                          if (!Number.isFinite(n)) return;
-                          setSlopeDraft({
-                            ...slopeDraft,
-                            trapLengthM: Math.min(
-                              TRAP_LENGTH_M_MAX,
-                              Math.max(TRAP_LENGTH_M_MIN, Math.round(n))
-                            ),
-                          });
-                        }}
-                        className="w-20 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm font-bold tabular-nums text-slate-900 outline-none focus:border-brand focus:ring-1 focus:ring-brand disabled:opacity-50"
-                      />
-                      <span className="font-semibold text-slate-500">m</span>
-                    </label>
-                  </div>
-
-                  <details className="rounded-md border border-slate-200 bg-slate-50/60 px-2.5 py-2">
-                    <summary className="cursor-pointer text-[11px] font-medium text-slate-600">
-                      Avancé — clamp DEM & bornes α
-                    </summary>
-                    <div className="mt-2 space-y-3">
-                      <div>
-                        <p className="mb-1 text-[11px] font-medium text-slate-600">
-                          Clamp |dz/ds| (réparation DEM)
-                        </p>
-                        <div className="flex flex-wrap gap-1">
-                          {MAX_GRADE_OPTIONS.map((opt) => (
-                            <button
-                              key={opt.value}
-                              type="button"
-                              title={opt.hint}
-                              disabled={paramsDisabled}
-                              onClick={() =>
-                                setSlopeDraft({
-                                  ...slopeDraft,
-                                  maxGrade: opt.value,
-                                })
-                              }
-                              className={`rounded-md px-2 py-1 text-[11px] font-semibold transition disabled:opacity-50 ${
-                                Math.abs(slopeDraft.maxGrade - opt.value) <
-                                1e-6
-                                  ? "bg-slate-900 text-white"
-                                  : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                              }`}
-                            >
-                              {opt.label}
-                            </button>
-                          ))}
-                        </div>
-                        <label className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-600">
-                          Valeur
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            min={MAX_GRADE_PCT_MIN}
-                            max={MAX_GRADE_PCT_MAX}
-                            step={1}
-                            disabled={paramsDisabled}
-                            value={gradeToPct(slopeDraft.maxGrade)}
-                            onChange={(e) => {
-                              const n = parseFloat(e.target.value);
-                              if (!Number.isFinite(n)) return;
-                              const pct = Math.min(
-                                MAX_GRADE_PCT_MAX,
-                                Math.max(MAX_GRADE_PCT_MIN, n)
-                              );
-                              setSlopeDraft({
-                                ...slopeDraft,
-                                maxGrade: pctToGrade(pct),
-                              });
-                            }}
-                            className="w-20 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm font-bold tabular-nums text-slate-900 outline-none focus:border-brand focus:ring-1 focus:ring-brand disabled:opacity-50"
-                          />
-                          <span className="font-semibold text-slate-500">%</span>
-                        </label>
-                      </div>
-                      <div>
-                        <p className="mb-1 text-[11px] font-medium text-slate-600">
-                          Bornes α imposées (optionnel)
-                        </p>
-                        <p className="mb-1.5 text-[10px] leading-snug text-slate-400">
-                          AVL N90 ≈ −7…+7 %. Vide = pas de clip. Ex. −8 / +8.
-                        </p>
-                        <div className="grid grid-cols-2 gap-2">
-                          <label className="block space-y-1">
-                            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                              Min
-                            </span>
-                            <div className="flex items-center gap-1">
-                              <OptionalPctInput
-                                value={slopeDraft.alphaMinPct}
-                                disabled={paramsDisabled}
-                                placeholder="auto"
-                                onCommit={(n) =>
-                                  setSlopeDraft({
-                                    ...slopeDraft,
-                                    alphaMinPct: n,
-                                  })
-                                }
-                              />
-                              <span className="shrink-0 text-[11px] font-semibold text-slate-500">
-                                %
-                              </span>
-                            </div>
-                          </label>
-                          <label className="block space-y-1">
-                            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                              Max
-                            </span>
-                            <div className="flex items-center gap-1">
-                              <OptionalPctInput
-                                value={slopeDraft.alphaMaxPct}
-                                disabled={paramsDisabled}
-                                placeholder="auto"
-                                onCommit={(n) =>
-                                  setSlopeDraft({
-                                    ...slopeDraft,
-                                    alphaMaxPct: n,
-                                  })
-                                }
-                              />
-                              <span className="shrink-0 text-[11px] font-semibold text-slate-500">
-                                %
-                              </span>
-                            </div>
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                  </details>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={paramsDisabled || !slopeDirty}
-                      onClick={() =>
-                        onSlopeAlgoChange(normalizeSlopeAlgo(slopeDraft))
-                      }
-                      className="rounded-md bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Appliquer le lissage
-                    </button>
-                    {slopeDirty ? (
-                      <button
-                        type="button"
-                        disabled={paramsDisabled}
-                        onClick={() =>
-                          setSlopeDraft(normalizeSlopeAlgo(slopeAlgo))
-                        }
-                        className="text-[11px] font-medium text-slate-500 underline-offset-2 hover:underline"
-                      >
-                        Annuler
-                      </button>
-                    ) : (
-                      <span className="text-[10px] text-slate-400">
-                        Synchronisé avec le corridor
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </AccordionSection>
-            )}
-
-            {/* 3. Impact — profil après les réglages */}
-            <AccordionSection
-              title="Profil de pente"
-              summary={slopeSummary}
-              defaultOpen
-            >
-              <div className="space-y-2 p-1">
-                <p className="text-[11px] leading-snug text-slate-500">
-                  Profil 1 km coloré par |pente| — mis à jour après{" "}
-                  <span className="font-semibold text-slate-700">
-                    Appliquer le lissage
-                  </span>
-                  . L = {slopeAlgo?.trapLengthM ?? "—"} m.
-                </p>
-                {buildingCorridor ? (
-                  <BuildProgressGauge active phase="corridor" variant="panel" />
-                ) : null}
-                {onSlopeUnitChange && (
-                  <SlopeUnitToggle
-                    value={slopeUnit}
-                    onChange={onSlopeUnitChange}
-                  />
-                )}
-                {corridor &&
-                  (corridor.elevations_m?.length ||
-                    corridor.slope_profile?.km_segments?.length) && (
-                    <ElevationProfileChart
-                      corridor={corridor}
-                      trapLengthM={slopeAlgo?.trapLengthM}
-                      meta={{
-                        originLat,
-                        originLon,
-                        destLat,
-                        destLon,
-                        originLabel: departureLabel,
-                        destLabel: destinationLabel,
-                      }}
-                    />
-                  )}
-                {corridor && corridor.alpha?.length > 1 ? (
-                  <SlopeChart
-                    corridor={corridor}
-                    slopeUnit={slopeUnit}
-                    onSlopeUnitChange={onSlopeUnitChange}
-                  />
-                ) : null}
-                {corridorSlopeExt ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                        Pente min (observée)
-                      </p>
-                      <p className="mt-0.5 text-sm font-bold tabular-nums text-slate-900">
-                        {corridorSlopeExt.min.toFixed(
-                          slopeUnit === "percent"
-                            ? 1
-                            : slopeUnit === "deg"
-                              ? 2
-                              : 4
-                        )}{" "}
-                        <span className="text-[11px] font-semibold text-slate-500">
-                          {slopeUnitLabel(slopeUnit)}
-                        </span>
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                        Pente max (observée)
-                      </p>
-                      <p className="mt-0.5 text-sm font-bold tabular-nums text-slate-900">
-                        {corridorSlopeExt.max.toFixed(
-                          slopeUnit === "percent"
-                            ? 1
-                            : slopeUnit === "deg"
-                              ? 2
-                              : 4
-                        )}{" "}
-                        <span className="text-[11px] font-semibold text-slate-500">
-                          {slopeUnitLabel(slopeUnit)}
-                        </span>
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="rounded-md border border-dashed border-slate-200 px-3 py-2 text-[11px] text-slate-500">
-                    Min / max après construction du cycle.
-                  </p>
-                )}
-
-                {elevStats && (
-                  <div className="rounded-md border border-slate-200 bg-white px-2.5 py-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                      Altitude {elevStats.corrected ? "(corrigée)" : "(DEM)"}
-                    </p>
-                    <p className="mt-0.5 text-[12px] tabular-nums text-slate-800">
-                      z min{" "}
-                      <span className="font-bold">
-                        {Math.round(elevStats.min)} m
-                      </span>
-                      {" · "}
-                      z max{" "}
-                      <span className="font-bold">
-                        {Math.round(elevStats.max)} m
-                      </span>
-                      {" · "}
-                      Δ{" "}
-                      <span className="font-bold">
-                        {Math.round(elevStats.delta)} m
-                      </span>
-                    </p>
-                  </div>
-                )}
-              </div>
-            </AccordionSection>
+            <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-snug text-slate-600">
+              <span className="font-semibold text-slate-700">
+                Infrastructure spatiale f(s)
+              </span>{" "}
+              — vitesse légale, pente, sources et filtres se configurent dans
+              l’atelier à droite. Cette barre latérale garde le contrôle des
+              feux et l’état des alertes.
+            </p>
 
             <AccordionSection
               title="Feux tricolores"
@@ -1409,7 +775,7 @@ export default function Sidebar({
             {warnings.length > 0 && (
               <WarningsPanel
                 warnings={warnings}
-                title="Imputations et alertes"
+                title="Alertes & imputations"
                 collapsible
                 defaultOpen={warnings.length <= 6}
               />
@@ -1423,6 +789,144 @@ export default function Sidebar({
 
         {activeStep === 3 && (
           <div className="flex flex-col gap-3">
+            <div
+              className="flex flex-wrap gap-1.5"
+              aria-label="État du run"
+              role="status"
+            >
+              <span
+                className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${
+                  preferredEngine === "sumo"
+                    ? "bg-slate-900 text-white"
+                    : "bg-slate-100 text-slate-700"
+                }`}
+              >
+                {preferredEngine === "sumo" ? "SUMO" : "IDM"}
+              </span>
+              <span
+                className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${
+                  enableMarkov
+                    ? "bg-amber-100 text-amber-900"
+                    : "bg-emerald-50 text-emerald-800"
+                }`}
+              >
+                Markov {enableMarkov ? "ON" : "OFF"}
+              </span>
+              <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                a_y {aY.toFixed(1)}
+              </span>
+              {envelopeMask && (
+                <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                  mask{" "}
+                  {[
+                    envelopeMask.legal ? "L" : null,
+                    envelopeMask.traffic ? "T" : null,
+                    envelopeMask.curve ? "V" : null,
+                  ]
+                    .filter(Boolean)
+                    .join("·") || "—"}
+                </span>
+              )}
+              {onApplyHomologationPreset && (
+                <button
+                  type="button"
+                  disabled={paramsDisabled}
+                  onClick={onApplyHomologationPreset}
+                  className="rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  title="Markov OFF, a_y=3.5, mask AVL"
+                >
+                  Homologation AVL
+                </button>
+              )}
+            </div>
+            <AccordionSection
+              title="Vmax · Virage · Bruit"
+              summary={`Vmax ${maxSpeedKmh ?? "—"} · a_y ${aY.toFixed(1)} · Markov ${enableMarkov ? "ON" : "OFF"}`}
+              defaultOpen
+            >
+              <div className="space-y-3">
+                <label className="block space-y-1">
+                  <span className="flex items-center justify-between text-xs font-medium text-slate-700">
+                    <span>Vitesse Max Véhicule (km/h)</span>
+                    <span className="text-[10px] font-normal text-slate-500">
+                      remask client
+                    </span>
+                  </span>
+                  <input
+                    type="number"
+                    min={30}
+                    max={300}
+                    step={5}
+                    value={maxSpeedKmh ?? 130}
+                    disabled={paramsDisabled}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      onMaxSpeedKmhChange(
+                        Number.isFinite(v) ? Math.max(30, v) : 130
+                      );
+                    }}
+                    className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand focus:ring-1 focus:ring-brand disabled:opacity-60"
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="flex items-center justify-between text-xs font-medium text-slate-700">
+                    <span>Latéral en virage a_y (m/s²)</span>
+                    <span className="text-[10px] font-normal text-slate-500">
+                      V_curve ∝ √a_y
+                    </span>
+                  </span>
+                  <input
+                    type="range"
+                    min={1.5}
+                    max={6.0}
+                    step={0.1}
+                    value={aY}
+                    disabled={paramsDisabled}
+                    onChange={(e) => onAYChange(Number(e.target.value))}
+                    className="w-full accent-brand"
+                  />
+                  <p className="text-right text-[10px] text-slate-500 tabular-nums">
+                    a_y = {aY.toFixed(1)} m/s²
+                  </p>
+                </label>
+                <label className="flex items-center justify-between gap-3 text-xs font-medium text-slate-700">
+                  <span>Bruit stochastique Markov (IDM)</span>
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-brand"
+                    checked={enableMarkov}
+                    disabled={paramsDisabled || !onEnableMarkovChange}
+                    onChange={(e) => onEnableMarkovChange?.(e.target.checked)}
+                  />
+                </label>
+                <p className="text-[10px] leading-snug text-slate-500">
+                  Homologation (AVL) = Markov OFF, virage max = 3.5 m/s².
+                </p>
+              </div>
+            </AccordionSection>
+
+            {corridor && corridor.S.length > 1 && (
+              <AccordionSection
+                title="Aperçu de la Cinématique V(t)"
+                summary={`min(V_env · ${(physics.speed_factor ?? 1).toFixed(2)}, Vmax ${maxSpeedKmh ?? "—"})`}
+                defaultOpen
+              >
+                <div className="space-y-2 p-1">
+                  <p className="text-[11px] leading-snug text-slate-500">
+                    Domaine temporel f(t) — enveloppe désirée du conducteur.
+                    Bouger Vmax, a_y ou le profil conducteur remasque le
+                    corridor côté client (aucun rebuild).
+                  </p>
+                  <SpeedEnvelopeTimeChart
+                    corridor={corridor}
+                    envelopeMask={envelopeMask}
+                    speedFactor={physics.speed_factor}
+                    maxSpeedKmh={maxSpeedKmh}
+                  />
+                </div>
+              </AccordionSection>
+            )}
+
             <AccordionSection
               title="Moteur"
               summary={preferredEngine === "sumo" ? "SUMO" : "IDM (défaut)"}
@@ -1504,7 +1008,7 @@ export default function Sidebar({
                 title="Véhicule"
                 summary={
                   vehicleId
-                    ? `${getVehicle(vehicleId)?.code ?? vehicleId} · P / couple en Résultats`
+                    ? `${getVehicle(vehicleId)?.code ?? vehicleId} · P / couple en Cycle`
                     : "Masse, F0/F1/F2, r_dyn → P / couple"
                 }
                 defaultOpen
@@ -1517,7 +1021,7 @@ export default function Sidebar({
                 />
                 <p className="mt-2 text-[10px] leading-snug text-slate-500">
                   Le véhicule choisi ici sert au solveur (Vmax) et aux courbes
-                  puissance / couple aux roues à l’étape Résultats.
+                  puissance / couple aux roues à l’étape Cycle.
                 </p>
               </AccordionSection>
             )}
@@ -1716,84 +1220,6 @@ export default function Sidebar({
         />
       )}
     </aside>
-  );
-}
-
-function OptionalPctInput({
-  value,
-  onCommit,
-  disabled,
-  placeholder,
-}: {
-  value: number | null;
-  onCommit: (v: number | null) => void;
-  disabled?: boolean;
-  placeholder?: string;
-}) {
-  const format = (v: number | null) => (v == null ? "" : String(v));
-  const [text, setText] = useState(() => format(value));
-  const [focused, setFocused] = useState(false);
-
-  useEffect(() => {
-    if (!focused) setText(format(value));
-  }, [value, focused]);
-
-  const tryCommit = (raw: string, { allowIncomplete }: { allowIncomplete: boolean }) => {
-    const trimmed = raw.trim().replace(",", ".");
-    if (trimmed === "") {
-      onCommit(null);
-      return true;
-    }
-    if (
-      trimmed === "-" ||
-      trimmed === "." ||
-      trimmed === "-." ||
-      /^-?\d+[.,]$/.test(trimmed)
-    ) {
-      return allowIncomplete;
-    }
-    const n = Number.parseFloat(trimmed);
-    if (!Number.isFinite(n)) return false;
-    onCommit(n);
-    return true;
-  };
-
-  return (
-    <input
-      type="text"
-      inputMode="decimal"
-      disabled={disabled}
-      placeholder={placeholder}
-      value={text}
-      onFocus={() => setFocused(true)}
-      onBlur={() => {
-        setFocused(false);
-        if (!tryCommit(text, { allowIncomplete: false })) {
-          setText(format(value));
-          return;
-        }
-        const trimmed = text.trim().replace(",", ".");
-        if (
-          trimmed === "" ||
-          trimmed === "-" ||
-          trimmed === "." ||
-          trimmed === "-."
-        ) {
-          setText("");
-          onCommit(null);
-          return;
-        }
-        const n = Number.parseFloat(trimmed);
-        if (Number.isFinite(n)) setText(String(n));
-      }}
-      onChange={(e) => {
-        const raw = e.target.value;
-        if (raw !== "" && !/^-?\d*[.,]?\d*$/.test(raw)) return;
-        setText(raw);
-        tryCommit(raw, { allowIncomplete: true });
-      }}
-      className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-bold tabular-nums text-slate-900 outline-none focus:border-brand focus:ring-1 focus:ring-brand disabled:opacity-50"
-    />
   );
 }
 

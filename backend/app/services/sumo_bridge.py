@@ -52,11 +52,15 @@ PROFILE_TO_VTYPE = {
     "Normal": "Normal",
     "Agressif": "Agressif",
     "Sportif": "Sportif",
+    "Prudent": "Prudent",
+    "Dynamique": "Dynamique",
     "eco": "Eco",
     "normal": "Normal",
     "agressif": "Agressif",
     "sportif": "Sportif",
     "sport": "Sportif",
+    "prudent": "Prudent",
+    "dynamique": "Dynamique",
 }
 
 
@@ -175,7 +179,7 @@ def _profile_to_vtype(driver_profile: Any) -> str:
     if not vtype:
         raise ValueError(
             f"Unknown driver_profile {driver_profile!r}; "
-            "expected Eco|Normal|Agressif|Sportif"
+            "expected Eco|Normal|Agressif|Sportif|Prudent|Dynamique"
         )
     return vtype
 

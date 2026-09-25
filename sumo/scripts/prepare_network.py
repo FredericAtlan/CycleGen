@@ -29,7 +29,9 @@ DEFAULT_WORK_DIR = os.environ.get("SUMO_WORK_DIR", "/tmp/cyclegen-sumo")
 DEFAULT_TEMPLATES = Path(os.environ.get("SUMO_TEMPLATES", "/sumo/templates"))
 
 # Ego vType stubs (Eco / Normal / Agressif) — mirror sumo/templates/vtypes.add.xml
-VALID_VTYPES = frozenset({"Eco", "Normal", "Agressif", "Sportif"})
+VALID_VTYPES = frozenset(
+    {"Eco", "Normal", "Agressif", "Sportif", "Prudent", "Dynamique"}
+)
 
 
 def write_routes(

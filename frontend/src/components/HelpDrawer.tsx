@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import { useHelp } from "@/components/HelpContext";
 import type { StudioWizardStep } from "@/components/StudioStepper";
 import { STUDIO_WIZARD_LABELS } from "@/components/StudioStepper";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import {
   ARCHITECTURE_HELP,
   STEP_HELP_DOCS,
@@ -111,10 +112,18 @@ function renderMarkdown(md: string): string {
           .replace(/>/g, "&gt;")
           .replace(/`([^`]+)`/g, "<code>$1</code>")
           .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-          .replace(
-            /\[([^\]]+)\]\(([^)]+)\)/g,
-            '<a href="$2" target="_blank" rel="noreferrer">$1</a>'
-          );
+          .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label: string, href: string) => {
+            const trimmed = String(href).trim();
+            if (!/^(https?:\/\/|\/|#)/i.test(trimmed)) {
+              return label;
+            }
+            const safe = trimmed
+              .replace(/&/g, "&amp;")
+              .replace(/"/g, "&quot;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;");
+            return `<a href="${safe}" target="_blank" rel="noreferrer">${label}</a>`;
+          });
       })
       .join("");
 
@@ -197,6 +206,8 @@ export default function HelpDrawer() {
   const [body, setBody] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const panelRef = useRef<HTMLElement | null>(null);
+  useFocusTrap(open, panelRef);
 
   useEffect(() => {
     if (!open) return;
@@ -249,6 +260,7 @@ export default function HelpDrawer() {
 
   return (
     <div
+      data-testid="help-drawer"
       className="fixed inset-0 z-[80] flex justify-end"
       role="dialog"
       aria-modal="true"
@@ -260,7 +272,11 @@ export default function HelpDrawer() {
         className="absolute inset-0 bg-slate-900/35 backdrop-blur-[1px]"
         onClick={closeHelp}
       />
-      <aside className="relative z-[1] flex h-full w-[min(80vw,1100px)] max-w-full flex-col border-l border-slate-200 bg-white shadow-2xl">
+      <aside
+        ref={panelRef}
+        className="relative z-[1] flex h-full w-[min(80vw,1100px)] max-w-full flex-col border-l border-slate-200 bg-white shadow-2xl"
+        tabIndex={-1}
+      >
         <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
           <div className="min-w-0">
             <h2

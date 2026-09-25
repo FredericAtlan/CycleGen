@@ -6,17 +6,30 @@ import DynamicMap from "@/components/DynamicMap";
 import RoadLoupe3D from "@/components/corridor/RoadLoupe3D";
 import Sidebar from "@/components/Sidebar";
 import MapCameraControls from "@/components/MapCameraControls";
+import { ChartFocusHostProvider } from "@/components/corridor/ChartFocusHost";
+import ConstraintWorkspace, {
+  type ElevationCombineMode,
+  type LegalSmoothMode,
+} from "@/components/corridor/ConstraintWorkspace";
+import {
+  buildElevationSourceRows,
+  buildSpeedSourceRows,
+  type SpeedSourceKey,
+} from "@/components/corridor/RouterSourceToggles";
+import type { ElevationSourceKey } from "@/lib/types";
 import {
   DEFAULT_MAP_SPEED_LAYERS,
   type MapSpeedLayers,
 } from "@/components/MapLayerControls";
-import {
+import StudioStepper, {
   type StudioWizardStep,
 } from "@/components/StudioStepper";
 import { useHeaderChrome } from "@/components/HeaderChromeContext";
 import ResultsAnalysisPanel from "@/components/export/ResultsAnalysisPanel";
 import type { LivePoint } from "@/components/simulation/LiveCharts";
 import LiveAnalysisPanel from "@/components/simulation/LiveAnalysisPanel";
+import PlaybackBar from "@/components/simulation/PlaybackBar";
+import { useCyclePlayback } from "@/hooks/useCyclePlayback";
 import { interpolateAlongS } from "@/components/simulation/geo";
 import {
   useSimulationSocket,
@@ -293,6 +306,14 @@ export default function CycleGenShell() {
   const [routingProfile, setRoutingProfile] = useState<RoutingProfile>(
     () => (boot?.routingProfile as RoutingProfile) ?? "HERE/ADAS"
   );
+  // Multi-router selection (ordered ; first = primary geometry).
+  const [routingProfiles, setRoutingProfiles] = useState<RoutingProfile[]>(
+    () => {
+      const primary =
+        (boot?.routingProfile as RoutingProfile) ?? "HERE/ADAS";
+      return [primary];
+    }
+  );
   const [departAt, setDepartAt] = useState(
     () => boot?.departAt ?? toDatetimeLocalValue(new Date())
   );
@@ -368,6 +389,8 @@ export default function CycleGenShell() {
     () => boot?.syncChartMap ?? true
   );
   const [chartCursorS, setChartCursorS] = useState<number | null>(null);
+  const playback = useCyclePlayback(profile, simulationId);
+  const playbackAutoKeyRef = useRef<string>("");
   const [brushRange, setBrushRange] = useState<{
     s0: number;
     s1: number;
@@ -423,6 +446,25 @@ export default function CycleGenShell() {
   const [enableMarkov, setEnableMarkov] = useState(
     () => boot?.enableMarkov ?? false
   );
+  // Contraintes step 2 — sources cochables + clamps.
+  const [speedSources, setSpeedSources] = useState<SpeedSourceKey[]>([
+    "here",
+    "mapbox",
+    "osrm",
+    "osm",
+  ]);
+  const [elevationSources, setElevationSources] = useState<ElevationSourceKey[]>(
+    ["here", "open-meteo", "open-elevation", "opentopodata"]
+  );
+  const [elevationCombine, setElevationCombine] =
+    useState<ElevationCombineMode>("mean");
+  const [speedMinKmh, setSpeedMinKmh] = useState<number | null>(null);
+  const [speedMaxKmh, setSpeedMaxKmh] = useState<number | null>(null);
+  const [respectLegalLimits, setRespectLegalLimits] = useState(true);
+  const [legalSmoothModeLocal, setLegalSmoothModeLocal] =
+    useState<LegalSmoothMode>("majority");
+  const [legalSmoothWindowLocal, setLegalSmoothWindowLocal] = useState(250);
+  const [trapLengthMLocal, setTrapLengthMLocal] = useState(50);
   const [corridorProfileBusy, setCorridorProfileBusy] = useState(false);
   const [includeTrafficLights, setIncludeTrafficLights] = useState(
     () => boot?.includeTrafficLights ?? true
@@ -706,7 +748,9 @@ export default function CycleGenShell() {
           dp === "Eco" ||
           dp === "Normal" ||
           dp === "Agressif" ||
-          dp === "Sportif"
+          dp === "Sportif" ||
+          dp === "Prudent" ||
+          dp === "Dynamique"
         ) {
           setDriverProfile(dp);
           if (!meta.physics) setPhysics(presetFor(dp).physics);
@@ -1175,6 +1219,24 @@ export default function CycleGenShell() {
     return interpolateAlongS(corridor, chartCursorS, geometry);
   }, [syncChartMap, chartCursorS, corridor, geometry]);
 
+  const replayEgo = useMemo(() => {
+    if (stage !== "completed" || !playback.ready) return null;
+    return interpolateAlongS(corridor, playback.s, geometry);
+  }, [stage, playback.ready, playback.s, corridor, geometry]);
+
+  /** Chart↔map cursor: ignore clears while replaying; scrub seeks the playhead. */
+  const handleCursorS = useCallback(
+    (s_m: number | null) => {
+      if (playback.playing) {
+        if (s_m == null) return;
+        playback.pause();
+        playback.seekS(s_m);
+      }
+      setChartCursorS(s_m);
+    },
+    [playback]
+  );
+
   const lastLoupeSRef = useRef(0);
 
   const handleBrushRangeS = useCallback(
@@ -1271,12 +1333,20 @@ export default function CycleGenShell() {
           legalSmoothMode: legal.mode,
           legalSmoothWindowM: legal.windowM,
           legalMinRunM: legal.minRunM,
-          enableSpeedLimits: envelopeMask.legal,
+          enableSpeedLimits: respectLegalLimits && envelopeMask.legal,
           globalMaxSpeedKmh: maxSpeedKmh ?? 130,
           includeTrafficInEnvelope: envelopeMask.traffic,
+          speedSources,
+          elevationSources,
+          elevationCombine,
+          speedMinKmh,
+          speedMaxKmh,
         });
         const masked = applyEnvelopeMask(result.corridor, envelopeMask, {
           globalMaxKmh: maxSpeedKmh,
+          aY,
+          speedMinKmh,
+          speedMaxKmh,
         });
         const snap = snapshotFeux(masked);
         if (snap) feuxBackupRef.current = snap;
@@ -1356,7 +1426,26 @@ export default function CycleGenShell() {
         setBuildingCorridor(false);
       }
     },
-    [aY, envelopeMask, envelopeKey, includeTrafficLights, slopeAlgo, legalFilter, maxSpeedKmh, routingProfile, waypoints, departAt, departureLabel, destinationLabel]
+    [
+      aY,
+      envelopeMask,
+      envelopeKey,
+      includeTrafficLights,
+      slopeAlgo,
+      legalFilter,
+      maxSpeedKmh,
+      routingProfile,
+      waypoints,
+      departAt,
+      departureLabel,
+      destinationLabel,
+      respectLegalLimits,
+      speedSources,
+      elevationSources,
+      elevationCombine,
+      speedMinKmh,
+      speedMaxKmh,
+    ]
   );
 
   const handleIncludeTrafficLightsChange = useCallback(
@@ -1482,13 +1571,23 @@ export default function CycleGenShell() {
   const handleEnvelopeMaskChange = useCallback(
     (mask: EnvelopeMask) => {
       setEnvelopeMask(mask);
+      // Mirror composition toggles onto map L/T/R layers (atelier = source of truth).
+      setMapSpeedLayers((prev) => ({
+        ...prev,
+        legal: mask.legal,
+        traffic: mask.traffic,
+        curve: mask.curve,
+      }));
       setCorridor((prev) =>
         prev
-          ? applyEnvelopeMask(prev, mask, { globalMaxKmh: maxSpeedKmh })
+          ? applyEnvelopeMask(prev, mask, {
+              globalMaxKmh: maxSpeedKmh,
+              aY,
+            })
           : prev
       );
     },
-    [maxSpeedKmh]
+    [aY, maxSpeedKmh]
   );
 
   const handleMaxSpeedKmhChange = useCallback(
@@ -1496,21 +1595,77 @@ export default function CycleGenShell() {
       setMaxSpeedKmh(value);
       setCorridor((prev) =>
         prev
-          ? applyEnvelopeMask(prev, envelopeMask, { globalMaxKmh: value })
+          ? applyEnvelopeMask(prev, envelopeMask, {
+              globalMaxKmh: value,
+              aY,
+            })
           : prev
       );
     },
-    [envelopeMask]
+    [aY, envelopeMask]
   );
+
+  const handleAYChange = useCallback(
+    (value: number) => {
+      setAY(value);
+      setCorridor((prev) =>
+        prev
+          ? applyEnvelopeMask(prev, envelopeMask, {
+              globalMaxKmh: maxSpeedKmh,
+              aY: value,
+              speedMinKmh,
+              speedMaxKmh,
+            })
+          : prev
+      );
+    },
+    [envelopeMask, maxSpeedKmh, speedMinKmh, speedMaxKmh]
+  );
+
+  // Debounced spatial-filter rebuild (300 ms) — called by the workspace when
+  // an option that requires a server rebuild changes (legal_smooth_mode,
+  // trap_length, alpha_min/max, elevation_combine, speed_min/max, sources).
+  const rebuildDebounceRef = useRef<number | null>(null);
+  const requestConstraintRebuild = useCallback(() => {
+    if (!routeResult) return;
+    if (rebuildDebounceRef.current != null) {
+      window.clearTimeout(rebuildDebounceRef.current);
+    }
+    rebuildDebounceRef.current = window.setTimeout(() => {
+      rebuildDebounceRef.current = null;
+      void runBuildCorridor(routeResult);
+    }, 300);
+  }, [routeResult, runBuildCorridor]);
+  useEffect(() => {
+    return () => {
+      if (rebuildDebounceRef.current != null) {
+        window.clearTimeout(rebuildDebounceRef.current);
+      }
+    };
+  }, []);
 
   const handleApplyHomologationPreset = useCallback(() => {
     setRoutingProfile("HERE/ADAS");
+    setRoutingProfiles(["HERE/ADAS"]);
     setMaxSpeedKmh(130);
     setEnableMarkov(false);
+    setAY(3.5);
+    setPreferredEngine("idm");
     const mask: EnvelopeMask = { legal: true, traffic: false, curve: true };
     setEnvelopeMask(mask);
+    setMapSpeedLayers((prev) => ({
+      ...prev,
+      legal: true,
+      traffic: false,
+      curve: true,
+    }));
     setCorridor((prev) =>
-      prev ? applyEnvelopeMask(prev, mask, { globalMaxKmh: 130 }) : prev
+      prev
+        ? applyEnvelopeMask(prev, mask, {
+            globalMaxKmh: 130,
+            aY: 3.5,
+          })
+        : prev
     );
   }, []);
 
@@ -1968,7 +2123,7 @@ export default function CycleGenShell() {
       setMaxUnlocked(4);
       setStage("completed");
       setError(
-        "Ce cycle n’a pas de GPS — pas d’itinéraire à calculer. Analyse vitesse / pente / couple à l’étape Résultats."
+        "Ce cycle n’a pas de GPS — pas d’itinéraire à calculer. Analyse vitesse / pente / couple à l’étape Cycle."
       );
       return null;
     }
@@ -2084,6 +2239,8 @@ export default function CycleGenShell() {
           stop_duration_s: w.stop_duration_s,
         })),
         routingProfile,
+        routingProfiles:
+          routingProfiles.length > 0 ? routingProfiles : [routingProfile],
         departAt: datetimeLocalToIso(departAt),
         aY,
       });
@@ -2170,6 +2327,7 @@ export default function CycleGenShell() {
     destinationLabel,
     waypoints,
     routingProfile,
+    routingProfiles,
     departAt,
     aY,
     resetSimState,
@@ -2211,7 +2369,7 @@ export default function CycleGenShell() {
       }
     } catch (err) {
       setSimError(errMessage(err, "Impossible de consolider le profil."));
-      setWsEnabled(true);
+      // Keep WS disabled on stop failure — re-enabling would resume a dead stream.
       setGeneratingCycle(false);
     } finally {
       setSimStopping(false);
@@ -2320,7 +2478,7 @@ export default function CycleGenShell() {
         return;
       }
 
-      setWsUrl(simulationWsUrl(res.ws_path));
+      setWsUrl(simulationWsUrl(res.ws_path, res.ws_token));
       setWsEnabled(true);
     } catch (err) {
       setSimError(errMessage(err, "Impossible de générer le cycle."));
@@ -2395,6 +2553,10 @@ export default function CycleGenShell() {
     []
   );
 
+  const handleWsReconnect = useCallback(() => {
+    setSeries([]);
+  }, []);
+
   useSimulationSocket({
     url: wsUrl,
     enabled: wsEnabled && stage === "simulating",
@@ -2403,6 +2565,7 @@ export default function CycleGenShell() {
     onEnd: () => {
       void consolidateSimulation();
     },
+    onReconnect: handleWsReconnect,
   });
 
   const handleStopSimulation = useCallback(() => {
@@ -2415,6 +2578,7 @@ export default function CycleGenShell() {
   }, [corridor, distanceM]);
 
   const liveFollow = stage === "simulating" && !!egoPosition;
+  const replayFollow = stage === "completed" && playback.playing && !!replayEgo;
   const isLiveRun = stage === "simulating" || simStarting;
   /** Completed profile without map geometry (regulatory / OEM speed traces). */
   const profileOnlyMode =
@@ -2424,19 +2588,64 @@ export default function CycleGenShell() {
       geometry.length < 2 &&
       (stage === "completed" || activeStep === 4));
 
+  // Drive shared chart cursor from the playhead while replaying.
+  useEffect(() => {
+    if (playback.playing) setChartCursorS(playback.s);
+  }, [playback.playing, playback.s]);
+
+  // Opt-in auto-replay (×10): localStorage `cyclegen.autoReplay` = "1", default off.
+  // Skipped when prefers-reduced-motion.
+  useEffect(() => {
+    if (stage !== "completed" || !playback.ready || !profile) return;
+    const optedIn =
+      typeof window !== "undefined" &&
+      window.localStorage.getItem("cyclegen.autoReplay") === "1";
+    if (!optedIn) return;
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+    const key = [
+      simulationId ?? "",
+      profile.time.length,
+      profile.total_duration_s,
+      profile.position[profile.position.length - 1],
+    ].join(":");
+    if (playbackAutoKeyRef.current === key) return;
+    playbackAutoKeyRef.current = key;
+    playback.setSpeed(10);
+    const id = requestAnimationFrame(() => playback.play());
+    return () => cancelAnimationFrame(id);
+  }, [
+    stage,
+    playback.ready,
+    playback.play,
+    playback.setSpeed,
+    profile,
+    simulationId,
+  ]);
+
   if (liveFollow) {
     lastLoupeSRef.current = simS;
+  } else if (replayFollow) {
+    lastLoupeSRef.current = playback.s;
   } else if (chartCursorS != null && Number.isFinite(chartCursorS)) {
     lastLoupeSRef.current = chartCursorS;
   }
-  const loupeS = liveFollow ? simS : chartCursorS ?? lastLoupeSRef.current;
+  const loupeS = liveFollow
+    ? simS
+    : replayFollow
+      ? playback.s
+      : chartCursorS ?? lastLoupeSRef.current;
   const showRoadLoupe =
     !!corridor &&
     !!corridor.elevations_m?.length &&
     corridor.geometry.length >= 2 &&
     !profileOnlyMode;
 
-  // Sans GPS : rester sur Résultats — pas de pipeline trajet / corridor / sim.
+  // Sans GPS : rester sur Cycle — pas de pipeline trajet / corridor / sim.
   useEffect(() => {
     const labeledNoGps =
       destinationLabel.trim() === "Profil sans GPS" ||
@@ -2474,8 +2683,14 @@ export default function CycleGenShell() {
     pointB,
   ]);
 
-  /** Map + right column (no left sidebar): live animation and results. */
-  const mapRightLayout = isLiveRun || activeStep === 4 || noGpsBase;
+  /** Map narrows to a rail so a right panel can host analysis charts. */
+  const mapRightLayout =
+    isLiveRun ||
+    activeStep === 4 ||
+    noGpsBase ||
+    (activeStep === 2 && !!corridor);
+  /** Sidebar hidden only when the whole left column is a rail (live/results/no-gps). */
+  const hideSidebar = isLiveRun || activeStep === 4 || noGpsBase;
 
   const mapRightPrev = useRef(false);
   useEffect(() => {
@@ -2798,7 +3013,7 @@ export default function CycleGenShell() {
       if (simError) return simError;
       return `Simulation live (${(simEngine ?? preferredEngine).toUpperCase()})`;
     }
-    if (stage === "completed") return "Résultats — colonne droite";
+    if (stage === "completed") return "Cycle — colonne droite";
     if (activeStep === 1) return "Départ, arrivée, puis calculer l’itinéraire";
     if (activeStep === 2) return "Pente, feux, enveloppes — construire le cycle";
     if (activeStep === 3) return "Véhicule + IDM/SUMO, puis générez le cycle";
@@ -2829,9 +3044,20 @@ export default function CycleGenShell() {
   }, [profile, corridor, geometry.length]);
 
   return (
+    <ChartFocusHostProvider>
     <div className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-slate-50 text-slate-900">
+      <StudioStepper
+        activeStep={noGpsBase ? 4 : activeStep}
+        maxUnlocked={noGpsBase ? 4 : maxUnlocked}
+        onStepChange={(step) => {
+          if (noGpsBase && step !== 4) return;
+          setActiveStep(step);
+        }}
+        lockToStep={noGpsBase ? 4 : undefined}
+        cycleTitle={headerCycleTitle}
+      />
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-      {!mapRightLayout && (
+      {!hideSidebar && (
       <Sidebar
         activeStep={activeStep}
         departureLabel={departureLabel}
@@ -2865,10 +3091,16 @@ export default function CycleGenShell() {
         onRoutingProfileChange={(v) =>
           setRoutingProfile(v as RoutingProfile)
         }
+        routingProfiles={routingProfiles}
+        onRoutingProfilesChange={(next) => {
+          setRoutingProfiles(next);
+          if (next.length > 0) setRoutingProfile(next[0]);
+        }}
+        routerStatus={routeResult?.router_status ?? undefined}
         departAt={departAt}
         onDepartAtChange={setDepartAt}
         aY={aY}
-        onAYChange={setAY}
+        onAYChange={handleAYChange}
         trafficSource={trafficSource}
         warnings={warnings}
         driverProfile={driverProfile}
@@ -2882,7 +3114,7 @@ export default function CycleGenShell() {
         onMaxSpeedKmhChange={handleMaxSpeedKmhChange}
         envelopeMask={envelopeMask}
         onEnvelopeMaskChange={handleEnvelopeMaskChange}
-        onCursorS={setChartCursorS}
+        onCursorS={handleCursorS}
         onBrushRangeS={setBrushRange}
         enableMarkov={enableMarkov}
         onEnableMarkovChange={setEnableMarkov}
@@ -2961,20 +3193,28 @@ export default function CycleGenShell() {
           onMapClick={profileOnlyMode ? () => undefined : handleMapClick}
           layoutKey={`${activeStep}-${mapRightLayout ? "right" : "idle"}-${showRoadLoupe ? "loupe" : "noloupe"}`}
           egoPosition={
-            stage === "simulating" || stage === "completed"
+            stage === "simulating"
               ? egoPosition
-              : null
+              : stage === "completed"
+                ? replayEgo
+                : null
           }
           otherVehicles={stage === "simulating" ? otherVehicles : []}
-          syncCursor={liveFollow ? egoPosition : syncCursor}
-          syncPan={liveFollow ? true : syncChartMap}
+          syncCursor={
+            liveFollow
+              ? egoPosition
+              : replayFollow
+                ? replayEgo
+                : syncCursor
+          }
+          syncPan={liveFollow || replayFollow ? true : syncChartMap}
           rangeGeometry={rangeGeometry}
           referenceGeometry={referenceGeometry}
           mapFocus={mapFocus}
           showArrows={showRouteArrows}
           speedLayers={mapSpeedLayers}
           onRouteCursorS={
-            corridor && !profileOnlyMode ? setChartCursorS : undefined
+            corridor && !profileOnlyMode ? handleCursorS : undefined
           }
         />
         {!profileOnlyMode && (buildingCorridor || analyzing) ? (
@@ -2985,6 +3225,9 @@ export default function CycleGenShell() {
           />
         ) : null}
         </div>
+        {playback.ready && stage === "completed" && (
+          <PlaybackBar playback={playback} />
+        )}
         {showRoadLoupe && corridor && (
           <div className="shrink-0 border-t border-slate-200 bg-white p-1.5">
             <RoadLoupe3D corridor={corridor} s_m={loupeS} />
@@ -3021,7 +3264,7 @@ export default function CycleGenShell() {
           }
           hasReference={referenceGeometry.length >= 2}
           hasRange={rangeGeometry.length >= 2}
-          syncEnabled={liveFollow ? true : syncChartMap}
+          syncEnabled={liveFollow || replayFollow ? true : syncChartMap}
           onSyncChange={setSyncChartMap}
           onFocus={(kind) => bumpFocus({ kind })}
           onFocusRange={() => {
@@ -3092,6 +3335,92 @@ export default function CycleGenShell() {
         })()}
         </div>
 
+        {!isLiveRun && activeStep === 2 && corridor && routeResult && (
+          <aside className="flex h-full min-w-0 flex-1 flex-col border-l border-slate-200 bg-white">
+            <ConstraintWorkspace
+              corridor={corridor}
+              meta={{
+                originLat: pointA?.lat ?? null,
+                originLon: pointA?.lon ?? null,
+                destLat: pointB?.lat ?? null,
+                destLon: pointB?.lon ?? null,
+                originLabel: departureLabel,
+                destLabel: destinationLabel,
+              }}
+              envelopeMask={envelopeMask}
+              onEnvelopeMaskChange={handleEnvelopeMaskChange}
+              speedSources={speedSources}
+              onSpeedSourcesChange={setSpeedSources}
+              speedSourceRows={buildSpeedSourceRows({
+                routersUsed: routeResult.routers_used,
+                routerStatus: routeResult.router_status,
+                speedsByRouter: routeResult.segment_speeds_by_router,
+                osmSpeedLimitsCount:
+                  routeResult.osm_speed_limits?.length ?? 0,
+              })}
+              legalSmoothMode={legalSmoothModeLocal}
+              onLegalSmoothModeChange={(m) => {
+                setLegalSmoothModeLocal(m);
+                setLegalFilter((prev) => ({ ...prev, mode: m }));
+              }}
+              legalSmoothWindowM={legalSmoothWindowLocal}
+              onLegalSmoothWindowChange={(w) => {
+                setLegalSmoothWindowLocal(w);
+                setLegalFilter((prev) => ({ ...prev, windowM: w }));
+              }}
+              respectLegalLimits={respectLegalLimits}
+              onRespectLegalLimitsChange={setRespectLegalLimits}
+              speedMinKmh={speedMinKmh}
+              onSpeedMinKmhChange={setSpeedMinKmh}
+              speedMaxKmh={speedMaxKmh}
+              onSpeedMaxKmhChange={setSpeedMaxKmh}
+              globalMaxKmh={maxSpeedKmh}
+              trafficSource={trafficSource}
+              routersUsed={routeResult.routers_used}
+              elevationSources={elevationSources}
+              onElevationSourcesChange={setElevationSources}
+              elevationSourceRows={buildElevationSourceRows({
+                elevationsBySource: routeResult.elevations_by_source,
+                elevationSourceTag: routeResult.elevation_source,
+              })}
+              elevationCombine={elevationCombine}
+              onElevationCombineChange={setElevationCombine}
+              slopeSmoothPreset={slopeAlgo.smoothPreset}
+              onSlopeSmoothPresetChange={(p) =>
+                setSlopeAlgo((prev) => ({ ...prev, smoothPreset: p }))
+              }
+              slopeMaxGrade={slopeAlgo.maxGrade}
+              onSlopeMaxGradeChange={(g) =>
+                setSlopeAlgo((prev) => ({ ...prev, maxGrade: g }))
+              }
+              alphaMinPct={slopeAlgo.alphaMinPct ?? null}
+              onAlphaMinPctChange={(v) =>
+                setSlopeAlgo((prev) => ({ ...prev, alphaMinPct: v }))
+              }
+              alphaMaxPct={slopeAlgo.alphaMaxPct ?? null}
+              onAlphaMaxPctChange={(v) =>
+                setSlopeAlgo((prev) => ({ ...prev, alphaMaxPct: v }))
+              }
+              slopeUnit={slopeUnit}
+              onSlopeUnitChange={setSlopeUnit}
+              trapLengthM={trapLengthMLocal}
+              onTrapLengthMChange={(v) => {
+                setTrapLengthMLocal(v);
+                setSlopeAlgo((prev) => ({ ...prev, trapLengthM: v }));
+              }}
+              onCursorS={handleCursorS}
+              onBrushRangeS={handleBrushRangeS}
+              brushRangeS={brushRange}
+              highlightS={
+                playback.playing
+                  ? playback.s
+                  : chartCursorS ?? (playback.ready ? playback.s : null)
+              }
+              onRequestRebuild={requestConstraintRebuild}
+            />
+          </aside>
+        )}
+
         {isLiveRun && (
           <LiveAnalysisPanel
             series={series}
@@ -3125,8 +3454,11 @@ export default function CycleGenShell() {
               slopeUnit={slopeUnit}
               onSlopeUnitChange={setSlopeUnit}
               syncEnabled={syncChartMap}
-              onCursorS={setChartCursorS}
+              onCursorS={handleCursorS}
               onBrushRangeS={handleBrushRangeS}
+              highlightT={playback.ready ? playback.t : null}
+              followPlayhead={playback.playing}
+              onSeekT={playback.seekT}
               trafficSource={trafficSource}
               warnings={warnings}
               driverProfile={driverProfile}
@@ -3181,7 +3513,7 @@ export default function CycleGenShell() {
               <p className="text-sm text-slate-500">
                 {noGpsBase || openEnergy
                   ? "Chargement du profil… Si rien n’apparaît, rouvrez le cycle via Bibliothèque → Étude énergie."
-                  : "Aucun profil encore — générez le cycle à l’étape Comportement."}
+                  : "Aucun profil encore — générez le cycle à l’étape Conducteur."}
               </p>
               {!(noGpsBase || openEnergy) && (
               <button
@@ -3272,6 +3604,7 @@ export default function CycleGenShell() {
       )}
       </div>
     </div>
+    </ChartFocusHostProvider>
   );
 }
 

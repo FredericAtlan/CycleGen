@@ -101,4 +101,50 @@
         <param key="jerk.accel"  value="3.0"/>
         <param key="jerk.brake"  value="5.0"/>
     </vType>
+
+    <!-- Prudent — AVL XSPACE fingerprint (soft a+, moderate brake, low sf). -->
+    <vType id="Prudent"
+           vClass="passenger"
+           carFollowModel="IDM"
+           accel="1.29"
+           decel="1.71"
+           emergencyDecel="5.0"
+           sigma="0.18"
+           tau="1.8"
+           length="4.5"
+           minGap="2.8"
+           maxSpeed="50"
+           speedFactor="1.02"
+           speedDev="0.05"
+           impatience="0.1"
+           actionStepLength="1.0">
+        <param key="idm.T"       value="1.8"/>
+        <param key="idm.s0"      value="2.8"/>
+        <param key="idm.delta"   value="4.0"/>
+        <param key="jerk.accel"  value="1.5"/>
+        <param key="jerk.brake"  value="1.5"/>
+    </vType>
+
+    <!-- Dynamique — AVL XSPACE fingerprint (strong brake/jerk, higher a_y). -->
+    <vType id="Dynamique"
+           vClass="passenger"
+           carFollowModel="IDM"
+           accel="2.08"
+           decel="3.47"
+           emergencyDecel="8.0"
+           sigma="0.45"
+           tau="1.2"
+           length="4.5"
+           minGap="1.8"
+           maxSpeed="60"
+           speedFactor="1.05"
+           speedDev="0.10"
+           impatience="0.55"
+           actionStepLength="1.0">
+        <param key="idm.T"       value="1.2"/>
+        <param key="idm.s0"      value="1.8"/>
+        <param key="idm.delta"   value="4.0"/>
+        <param key="jerk.accel"  value="3.0"/>
+        <param key="jerk.brake"  value="3.0"/>
+    </vType>
 </additional>

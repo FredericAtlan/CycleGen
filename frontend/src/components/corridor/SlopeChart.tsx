@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback } from "react";
 import {
   Line,
   LineChart,
@@ -8,6 +9,8 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  ReferenceLine,
+  ReferenceArea,
 } from "recharts";
 import type { SpatialCorridor } from "@/lib/types";
 import {
@@ -23,6 +26,12 @@ type SlopeChartProps = {
   slopeUnit?: SlopeUnit;
   onSlopeUnitChange?: (unit: SlopeUnit) => void;
   tall?: boolean;
+  /** Shared playhead / hover cursor along S (m). */
+  highlightS?: number | null;
+  onCursorS?: (s_m: number | null) => void;
+  syncEnabled?: boolean;
+  /** Shared brush portion from speed chart (m). */
+  brushRangeS?: { s0: number; s1: number } | null;
 };
 
 function buildData(corridor: SpatialCorridor, unit: SlopeUnit) {
@@ -50,11 +59,25 @@ export default function SlopeChart({
   slopeUnit = "percent",
   onSlopeUnitChange,
   tall = false,
+  highlightS = null,
+  onCursorS,
+  syncEnabled = true,
+  brushRangeS = null,
 }: SlopeChartProps) {
   const data = buildData(corridor, slopeUnit);
   const unitLabel = slopeUnitLabel(slopeUnit);
   const ext = slopeExtremes(corridor.alpha, slopeUnit);
   const digits = slopeUnit === "percent" ? 1 : slopeUnit === "deg" ? 2 : 4;
+
+  const handleMouseMove = useCallback(
+    (state: { activeLabel?: string | number }) => {
+      if (!syncEnabled || !onCursorS) return;
+      const s_km = Number(state?.activeLabel);
+      if (!Number.isFinite(s_km)) return;
+      onCursorS(s_km * 1000);
+    },
+    [syncEnabled, onCursorS]
+  );
 
   return (
     <div className="space-y-1.5">
@@ -85,7 +108,14 @@ export default function SlopeChart({
       </div>
       <div className={`w-full ${tall ? "h-52" : "h-36"}`}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
+          <LineChart
+            data={data}
+            margin={{ top: 4, right: 8, left: -12, bottom: 0 }}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={() => {
+              if (syncEnabled) onCursorS?.(null);
+            }}
+          >
             <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
             <XAxis
               dataKey="s_km"
@@ -119,6 +149,25 @@ export default function SlopeChart({
               ]}
               labelFormatter={(label) => `s = ${Number(label).toFixed(2)} km`}
             />
+            {brushRangeS &&
+              Number.isFinite(brushRangeS.s0) &&
+              Number.isFinite(brushRangeS.s1) && (
+                <ReferenceArea
+                  x1={Math.min(brushRangeS.s0, brushRangeS.s1) / 1000}
+                  x2={Math.max(brushRangeS.s0, brushRangeS.s1) / 1000}
+                  fill="#f59e0b"
+                  fillOpacity={0.12}
+                  strokeOpacity={0}
+                />
+              )}
+            {highlightS != null && Number.isFinite(highlightS) && (
+              <ReferenceLine
+                x={highlightS / 1000}
+                stroke="#0f172a"
+                strokeWidth={1.5}
+                strokeDasharray="4 3"
+              />
+            )}
             <Line
               type="monotone"
               dataKey="slope"

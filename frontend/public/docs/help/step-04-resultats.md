@@ -1,4 +1,4 @@
-# Étape 4 — Résultats
+# Étape 4 — Cycle
 
 > Objectif : **lire**, **valider**, **exporter** et **comparer** le cycle généré (ou un profil injecté sans GPS).
 
@@ -12,9 +12,9 @@
 │                                                             │
 │  ┌─ ProfileCharts ─────────────────────────────────────┐   │
 │  │ v(t) vs enveloppes · pente α(t) · curseur / fenêtres │   │
-│  │ clic → ChartInspectDrawer                            │   │
+│  │ clic → ResultsAnalyseStudio                            │   │
 │  └──────────────────────────────────────────────────────┘   │
-│  ┌─ MechanicCharts ─────────────────────────────────────┐   │
+│  ┌─ ResultsAnalyseStudio ─────────────────────────────────────┐   │
 │  │ couple · P mécanique · P traction · P regen          │   │
 │  └──────────────────────────────────────────────────────┘   │
 │  Feux (édition tardive) · micro-inspect · export            │
@@ -33,7 +33,7 @@ Bibliothèque / import v(t)
         │
         ▼
 ┌───────────────────┐
-│ Résultats only    │  pas de trajet / corridor / sim
+│ Cycle only    │  pas de trajet / corridor / sim
 │ véhicule → P, τ   │  depuis v, a, α du profil
 └───────────────────┘
 ```
@@ -118,7 +118,7 @@ Sans véhicule sélectionné, les colonnes mécaniques restent vides.
 |--------|-------|
 | **Sauver le cycle** | Snapshot local (profil ± corridor ± métadonnées) |
 | **Versus** | CompareStudio : overlay \(v(t)\), KPIs côte-à-côte, inspect multi-runs |
-| Overlay base | Référence corpus injectée sur \(v(t)\) sans quitter Résultats |
+| Overlay base | Référence corpus injectée sur \(v(t)\) sans quitter Cycle |
 
 ---
 

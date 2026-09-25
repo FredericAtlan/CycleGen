@@ -146,7 +146,9 @@ export function normalizeSavedTrip(raw: unknown): SavedTripSnapshot | null {
     raw.driverProfile === "Eco" ||
     raw.driverProfile === "Normal" ||
     raw.driverProfile === "Agressif" ||
-    raw.driverProfile === "Sportif"
+    raw.driverProfile === "Sportif" ||
+    raw.driverProfile === "Prudent" ||
+    raw.driverProfile === "Dynamique"
       ? raw.driverProfile
       : "Normal";
 
@@ -222,12 +224,16 @@ export function listSavedTrips(): SavedTripSnapshot[] {
   );
 }
 
+export type SaveTripResult =
+  | { ok: true; trip: SavedTripSnapshot; slimmed?: boolean }
+  | { ok: false; reason: string };
+
 export function saveTrip(
   trip: Omit<SavedTripSnapshot, "id" | "savedAt"> & {
     id?: string;
     savedAt?: string;
   }
-): SavedTripSnapshot {
+): SaveTripResult {
   const id =
     trip.id ??
     (typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -249,6 +255,7 @@ export function saveTrip(
   );
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    return { ok: true, trip: saved };
   } catch (err) {
     // Long alpine corridors (~3k pts × arrays) can exceed localStorage quota.
     const slim = {
@@ -283,13 +290,18 @@ export function saveTrip(
     ].slice(0, MAX_TRIPS);
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(slimNext));
-      return slim;
+      return { ok: true, trip: slim, slimmed: true };
     } catch {
-      console.warn("tripStore: localStorage quota exceeded; trip not persisted", err);
-      return saved;
+      console.warn(
+        "tripStore: localStorage quota exceeded; trip not persisted",
+        err
+      );
+      return {
+        ok: false,
+        reason: "localStorage quota exceeded — trip not saved",
+      };
     }
   }
-  return saved;
 }
 
 export function deleteSavedTrip(id: string): void {

@@ -136,6 +136,14 @@ export const DEFAULT_ENVELOPE_MASK: EnvelopeMask = {
   curve: true,
 };
 
+/**
+ * Reference lateral acceleration (m/s²) used to compute the stored V_curve
+ * in the corridor. The client-side scaling below assumes V_curve = √(a_y · R)
+ * so V_curve_eff = V_curve_ref · √(a_y / a_y_ref). Keep in sync with the
+ * default `a_y_mps2` used in `build_spatial_corridor` (3.5).
+ */
+export const A_Y_REF_MPS2 = 3.5;
+
 function positiveMps(v: number | undefined): number | null {
   if (v == null || !Number.isFinite(v) || v <= 0) return null;
   // Match backend: curve non-binding sentinel (~1e6 m/s) must not win the min
@@ -151,10 +159,21 @@ function positiveMps(v: number | undefined): number | null {
  * (same as backend). Without it, mask toggles restore envelope "walls" and
  * the IDM look-ahead panics every few hundred metres (AVL vs CycleGen pump).
  */
+export type EnvelopeMaskOpts = {
+  /** Hard vehicle speed cap (km/h) — always applied when set. */
+  globalMaxKmh?: number | null;
+  /** Lateral comfort (m/s²) — scales V_curve via √(aY / A_Y_REF). */
+  aY?: number | null;
+  /** Optional user floor on V_envelope (km/h). */
+  speedMinKmh?: number | null;
+  /** Optional user ceiling on V_envelope (km/h). Distinct from Vmax vehicle. */
+  speedMaxKmh?: number | null;
+};
+
 export function applyEnvelopeMask(
   corridor: SpatialCorridor,
   mask: EnvelopeMask,
-  opts?: { globalMaxKmh?: number | null }
+  opts?: EnvelopeMaskOpts
 ): SpatialCorridor {
   const n = corridor.S.length;
   if (n === 0) return corridor;
@@ -174,6 +193,28 @@ export function applyEnvelopeMask(
       ? opts.globalMaxKmh / 3.6
       : null;
 
+  // a_y scaling factor (V_curve ∝ √a_y). Only downscale when < ref: upscaling
+  // above the reference would violate the physics used at corridor build time.
+  const aYRatio =
+    opts?.aY != null &&
+    Number.isFinite(opts.aY) &&
+    opts.aY > 0
+      ? Math.sqrt(opts.aY / A_Y_REF_MPS2)
+      : 1.0;
+
+  const vMinMps =
+    opts?.speedMinKmh != null &&
+    Number.isFinite(opts.speedMinKmh) &&
+    opts.speedMinKmh > 0
+      ? opts.speedMinKmh / 3.6
+      : null;
+  const vMaxMps =
+    opts?.speedMaxKmh != null &&
+    Number.isFinite(opts.speedMaxKmh) &&
+    opts.speedMaxKmh > 0
+      ? opts.speedMaxKmh / 3.6
+      : null;
+
   const raw: number[] = new Array(n);
   for (let i = 0; i < n; i++) {
     const parts: number[] = [];
@@ -187,9 +228,10 @@ export function applyEnvelopeMask(
     }
     if (mask.curve) {
       const v = positiveMps(curve[i]);
-      if (v != null) parts.push(v);
+      if (v != null) parts.push(v * aYRatio);
     }
     if (vCapMps != null) parts.push(vCapMps);
+    if (vMaxMps != null) parts.push(vMaxMps);
     if (parts.length > 0) {
       raw[i] = Math.min(...parts);
     } else {
@@ -199,7 +241,14 @@ export function applyEnvelopeMask(
 
   // Mirror backend: braking-feasible fill then spatial MA (~C⁰).
   const feasible = brakingFeasibleSpeed(corridor.S, raw, 1.71);
-  const V_envelope = smoothEnvelopeSpatial(corridor.S, feasible, 50);
+  let V_envelope = smoothEnvelopeSpatial(corridor.S, feasible, 50);
+
+  if (vMinMps != null) {
+    V_envelope = V_envelope.map((v) => Math.max(v, vMinMps));
+  }
+  if (vMaxMps != null) {
+    V_envelope = V_envelope.map((v) => Math.min(v, vMaxMps));
+  }
 
   return {
     ...corridor,

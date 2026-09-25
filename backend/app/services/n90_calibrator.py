@@ -68,6 +68,11 @@ DEFAULT_GRIDS: dict[str, list[float]] = {
     "speed_factor": [0.95, 1.05, 1.10],
 }
 
+# Per-axis length cap (DoS) — mirrors N90CalibrateRequest Field max_length.
+_MAX_GRID_AXIS_LEN = 32
+# Hard ceiling on Cartesian product size before materialising itertools.product.
+_MAX_PRODUCT_HARD = 50_000
+
 
 @dataclass
 class _ArmSpec:
@@ -106,8 +111,9 @@ def _resolve_grid(
     key: str, override: list[float] | None
 ) -> list[float]:
     if override:
-        return [float(x) for x in override]
-    return list(DEFAULT_GRIDS[key])
+        vals = [float(x) for x in override][:_MAX_GRID_AXIS_LEN]
+        return vals
+    return list(DEFAULT_GRIDS[key])[:_MAX_GRID_AXIS_LEN]
 
 
 def build_grid(
@@ -122,7 +128,7 @@ def build_grid(
     speed_factor_grid: list[float] | None,
     max_arms: int,
 ) -> list[_ArmSpec]:
-    combos = itertools.product(
+    axes = [
         _resolve_grid("a_max", a_max_grid),
         _resolve_grid("b_comf", b_comf_grid),
         _resolve_grid("T", T_grid),
@@ -131,7 +137,19 @@ def build_grid(
         _resolve_grid("jerk_max", jerk_max_grid),
         _resolve_grid("jerk_brake_max", jerk_brake_max_grid),
         _resolve_grid("speed_factor", speed_factor_grid),
-    )
+    ]
+    # Estimate Cartesian size BEFORE materialising itertools.product (DoS S3).
+    product_size = 1
+    for axis in axes:
+        product_size *= max(1, len(axis))
+    soft_cap = max(1, int(max_arms)) * 20
+    if product_size > soft_cap or product_size > _MAX_PRODUCT_HARD:
+        raise ValueError(
+            f"N90 grid product too large ({product_size} combos); "
+            f"max allowed is min({soft_cap}=max_arms*20, {_MAX_PRODUCT_HARD}). "
+            "Shrink *_grid lengths or lower max_arms."
+        )
+    combos = itertools.product(*axes)
     arms: list[_ArmSpec] = [
         _ArmSpec(
             a_max=a,

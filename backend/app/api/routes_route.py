@@ -185,4 +185,5 @@ async def analyze_route(body: RouteAnalyzeRequest) -> RouteAnalyzeResponse:
             depart_at=body.depart_at,
             a_y_mps2=body.a_y_mps2,
             routing_profile=body.routing_profile,
+            routing_profiles=list(body.routing_profiles or []),
         )

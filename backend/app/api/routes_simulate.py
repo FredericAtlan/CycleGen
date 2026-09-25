@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
@@ -13,17 +14,20 @@ from app.models.schemas import (
     SimulateStopResponse,
 )
 from app.services.simulation_manager import (
+    SimulationCapacityError,
     create_simulation,
     get_simulation,
     replay_frames_ws,
     request_stop,
+    wait_idm_done,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["simulate"])
 
-# WebSocket path relative to API root (/api). Full URL: /api/simulate/ws/{id}
+# WebSocket path relative to API root (/api). Full URL: /api/simulate/ws/{id}?token=…
+# Clients MUST pass the ``ws_token`` from SimulateStartResponse as query ``token``.
 WS_PATH_TEMPLATE = "/api/simulate/ws/{simulation_id}"
 
 
@@ -45,54 +49,64 @@ async def simulate_start(body: SimulateStartRequest) -> SimulateStartResponse:
             detail=f"corridor.geometry too large (max {max_pts})",
         )
 
-    record = create_simulation(
-        body.corridor,
-        body.driver_profile,
-        engine=body.engine,
-        seed=body.seed,
-        max_speed_mps=(
-            float(body.max_speed_kmh) / 3.6
-            if body.max_speed_kmh is not None
-            else None
-        ),
-        param_overrides=(
-            {
-                k: v
-                for k, v in {
-                    "a_max": body.driver_params.a_max if body.driver_params else None,
-                    "b_comf": body.driver_params.b_comf if body.driver_params else None,
-                    "speed_factor": (
-                        body.driver_params.speed_factor if body.driver_params else None
-                    ),
-                    "T": body.driver_params.T if body.driver_params else None,
-                    "T_h": body.driver_params.T_h if body.driver_params else None,
-                    "s0": body.driver_params.s0 if body.driver_params else None,
-                    "jerk_max": (
-                        body.driver_params.jerk_max if body.driver_params else None
-                    ),
-                    "jerk_brake_max": (
-                        body.driver_params.jerk_brake_max
-                        if body.driver_params
-                        else None
-                    ),
-                }.items()
-                if v is not None
-            }
-            or None
-        ),
-        driver_zones=(
-            [z.model_dump() for z in body.driver_zones]
-            if body.driver_zones
-            else None
-        ),
-        tls_override=body.tls_override,
-        enable_markov=body.enable_markov,
-    )
+    try:
+        record = create_simulation(
+            body.corridor,
+            body.driver_profile,
+            engine=body.engine,
+            seed=body.seed,
+            max_speed_mps=(
+                float(body.max_speed_kmh) / 3.6
+                if body.max_speed_kmh is not None
+                else None
+            ),
+            param_overrides=(
+                {
+                    k: v
+                    for k, v in {
+                        "a_max": body.driver_params.a_max if body.driver_params else None,
+                        "b_comf": body.driver_params.b_comf if body.driver_params else None,
+                        "speed_factor": (
+                            body.driver_params.speed_factor if body.driver_params else None
+                        ),
+                        "T": body.driver_params.T if body.driver_params else None,
+                        "T_h": body.driver_params.T_h if body.driver_params else None,
+                        "s0": body.driver_params.s0 if body.driver_params else None,
+                        "jerk_max": (
+                            body.driver_params.jerk_max if body.driver_params else None
+                        ),
+                        "jerk_brake_max": (
+                            body.driver_params.jerk_brake_max
+                            if body.driver_params
+                            else None
+                        ),
+                    }.items()
+                    if v is not None
+                }
+                or None
+            ),
+            driver_zones=(
+                [z.model_dump() for z in body.driver_zones]
+                if body.driver_zones
+                else None
+            ),
+            tls_override=body.tls_override,
+            enable_markov=body.enable_markov,
+        )
+    except SimulationCapacityError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+
+    # IDM: wait off the event loop so /health and other clients stay responsive,
+    # while preserving the historical contract that /start returns completed.
+    if record.engine == "idm":
+        await wait_idm_done(record)
+
     ws_path = WS_PATH_TEMPLATE.format(simulation_id=record.simulation_id)
     return SimulateStartResponse(
         simulation_id=record.simulation_id,
         engine=record.engine,
         ws_path=ws_path,
+        ws_token=record.ws_token,
         status=record.status,
     )
 
@@ -101,12 +115,22 @@ async def simulate_start(body: SimulateStartRequest) -> SimulateStartResponse:
 async def simulate_ws(websocket: WebSocket, simulation_id: str) -> None:
     """Stream ``SimulationFrame`` JSON messages until the run ends.
 
-    Mounted under the ``/api`` router prefix → full path ``/api/simulate/ws/{id}``
-    (matches ``SimulateStartResponse.ws_path``).
+    Mounted under the ``/api`` router prefix → full path
+    ``/api/simulate/ws/{id}?token=<ws_token>``
+    (matches ``SimulateStartResponse.ws_path`` + ``ws_token``).
     """
     record = get_simulation(simulation_id)
     if record is None:
         await websocket.close(code=4404)
+        return
+
+    token = websocket.query_params.get("token") or ""
+    if (
+        not token
+        or len(token) != len(record.ws_token)
+        or not secrets.compare_digest(token, record.ws_token)
+    ):
+        await websocket.close(code=4401)
         return
 
     await websocket.accept()

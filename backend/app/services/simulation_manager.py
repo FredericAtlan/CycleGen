@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import secrets
 import threading
 import uuid
 from dataclasses import dataclass, field
@@ -16,6 +18,7 @@ from app.models.schemas import (
     SimulationFrame,
     SpatialCorridor,
 )
+from app.services.ephemeral_store import EphemeralStore
 from app.services.kinematic_solver import IDMSolver, frames_to_profile
 from app.services.sumo_bridge import (
     DEFAULT_WORK_DIR,
@@ -28,6 +31,10 @@ logger = logging.getLogger(__name__)
 
 EngineName = Literal["sumo", "idm"]
 SimStatus = Literal["running", "completed", "stopped", "failed"]
+
+# DoS / OOM bounds (P0). Override via env.
+_MAX_SIMS = int(os.getenv("CYCLEGEN_MAX_SIMULATIONS", "32"))
+_SIM_TTL_S = float(os.getenv("CYCLEGEN_SIM_TTL_S", "3600"))
 
 
 @dataclass
@@ -42,6 +49,7 @@ class SimulationRecord:
     driver_zones: list[dict[str, Any]] | None = None
     tls_override: str = "auto"
     enable_markov: bool = False
+    ws_token: str = field(default_factory=lambda: secrets.token_urlsafe(24))
     status: SimStatus = "running"
     frames: list[SimulationFrame] = field(default_factory=list)
     profile: ConsolidatedProfile | None = None
@@ -93,8 +101,17 @@ class SimulationRecord:
             return profile
 
 
-# Global store — keyed by simulation_id
-SIM_STORE: dict[str, SimulationRecord] = {}
+# Global store — keyed by simulation_id (TTL + max size).
+SIM_STORE: EphemeralStore[SimulationRecord] = EphemeralStore(
+    max_items=_MAX_SIMS,
+    ttl_s=_SIM_TTL_S,
+    name="SIM_STORE",
+    prefer_evict=lambda r: r.status != "running",
+)
+
+
+class SimulationCapacityError(RuntimeError):
+    """Raised when too many live simulations are retained (DoS guard)."""
 
 
 def get_simulation(simulation_id: str) -> SimulationRecord | None:
@@ -113,7 +130,11 @@ def create_simulation(
     tls_override: str = "auto",
     enable_markov: bool = False,
 ) -> SimulationRecord:
-    """Choose engine (SUMO if available unless forced idm), spawn worker, store record."""
+    """Choose engine (SUMO if available unless forced idm), spawn worker, store record.
+
+    IDM runs on a daemon thread (never on the asyncio event loop). Callers that
+    need a completed IDM profile should ``await wait_idm_done(record)``.
+    """
     chosen: EngineName = "idm"
     if engine != "idm" and SumoBridge.available():
         chosen = "sumo"
@@ -134,21 +155,32 @@ def create_simulation(
         tls_override=tls_override or "auto",
         enable_markov=bool(enable_markov),
     )
-    SIM_STORE[sim_id] = record
-
-    if chosen == "idm":
-        _run_idm(record)
-    else:
-        worker = threading.Thread(
-            target=_run_sumo_worker,
-            args=(record,),
-            name=f"sumo-{sim_id[:8]}",
-            daemon=True,
+    if not SIM_STORE.try_put(sim_id, record):
+        raise SimulationCapacityError(
+            f"too many running simulations (max {SIM_STORE.max_items}); "
+            "stop one or raise CYCLEGEN_MAX_SIMULATIONS"
         )
-        record._worker = worker
-        worker.start()
+
+    # Always offload CPU work to a daemon thread (IDM and SUMO).
+    target = _run_idm if chosen == "idm" else _run_sumo_worker
+    worker = threading.Thread(
+        target=target,
+        args=(record,),
+        name=f"{chosen}-{sim_id[:8]}",
+        daemon=True,
+    )
+    record._worker = worker
+    worker.start()
 
     return record
+
+
+async def wait_idm_done(record: SimulationRecord) -> None:
+    """Await IDM worker without blocking the asyncio event loop."""
+    worker = record._worker
+    if worker is None or record.engine != "idm":
+        return
+    await asyncio.to_thread(worker.join)
 
 
 def request_stop(simulation_id: str) -> SimulationRecord | None:

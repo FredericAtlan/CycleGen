@@ -283,21 +283,67 @@ def curvature_radius_m(
 def curve_speed_limit_mps(
     R: Sequence[float],
     *,
-    a_y_mps2: float = 2.5,
+    a_y_mps2: float | Sequence[float] = 2.5,
 ) -> list[float]:
     """Comfort lateral speed v = √(a_y · R).
 
     Not a posted speed limit. On straight geometry (large R) returns a
     non-binding sentinel so min(legal, traffic, curve) ignores it.
+
+    ``a_y_mps2`` may be a scalar or a per-sample sequence (alpine zones /
+    hairpin boost).
     """
-    ay = max(0.5, float(a_y_mps2))
+    n = len(R)
+    if isinstance(a_y_mps2, (int, float)):
+        ay_seq = [max(0.5, float(a_y_mps2))] * n
+    else:
+        ay_list = list(a_y_mps2)
+        if len(ay_list) != n:
+            # Broadcast / pad / trim to match R length.
+            if not ay_list:
+                ay_list = [2.5]
+            if len(ay_list) < n:
+                ay_list = ay_list + [ay_list[-1]] * (n - len(ay_list))
+            else:
+                ay_list = ay_list[:n]
+        ay_seq = [max(0.5, float(a)) for a in ay_list]
     out: list[float] = []
-    for r in R:
-        v = math.sqrt(ay * max(MIN_R_M, float(r)))
+    for i, r in enumerate(R):
+        v = math.sqrt(ay_seq[i] * max(MIN_R_M, float(r)))
         if v >= CURVE_ACTIVE_BELOW_MPS:
             out.append(NON_BINDING_V_MPS)
         else:
             out.append(v)
+    return out
+
+
+def alpine_ay_profile(
+    R: Sequence[float],
+    a_y_base: float,
+    *,
+    a_y_hairpin: float | None = None,
+    r_hairpin_m: float = 35.0,
+    r_blend_m: float = 20.0,
+) -> list[float]:
+    """Per-sample a_y: boost toward ``a_y_hairpin`` on tight alpine radii.
+
+    Straight / large-R samples keep ``a_y_base`` (curve envelope usually
+    non-binding there). Hairpins (R ≲ ``r_hairpin_m``) raise lateral comfort
+    so Dynamique can track AVL Route Studio curve calls without lifting the
+    whole-route a_y.
+    """
+    base = max(0.5, float(a_y_base))
+    hair = max(base, float(a_y_hairpin) if a_y_hairpin is not None else base * 1.2)
+    span = max(1.0, float(r_blend_m))
+    out: list[float] = []
+    for r in R:
+        rr = float(r)
+        if rr >= r_hairpin_m:
+            out.append(base)
+            continue
+        # R = r_hairpin → 0, R = r_hairpin - span → 1
+        t = max(0.0, min(1.0, (r_hairpin_m - rr) / span))
+        out.append(base + t * (hair - base))
     return out
 
 

@@ -8,10 +8,13 @@ import type {
   CorridorBuildRequest,
   CorridorBuildResponse,
   DriverProfile,
+  ElevationSourceKey,
   ExportFormat,
   ExportRequest,
   RouteAnalyzeRequest,
   RouteAnalyzeResponse,
+  RouterKey,
+  RoutingProfile,
   ScenarioRunRequest,
   ScenarioRunResponse,
   SimEngine,
@@ -22,6 +25,11 @@ import type {
   TlsOverride,
   WaypointSpec,
 } from "./types";
+import {
+  beginApiRequest,
+  endApiRequestError,
+  endApiRequestOk,
+} from "./apiActivity";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
@@ -30,6 +38,28 @@ const API_URL =
 const WS_URL =
   process.env.NEXT_PUBLIC_WS_URL?.replace(/\/$/, "") ||
   "ws://localhost:8000";
+
+/** Optional — must match backend CYCLEGEN_API_KEY when that env is set. */
+const API_KEY = (process.env.NEXT_PUBLIC_API_KEY || "").trim();
+
+const _timeoutRaw = process.env.NEXT_PUBLIC_API_TIMEOUT_MS;
+const _timeoutParsed = _timeoutRaw != null ? Number(_timeoutRaw) : NaN;
+const API_TIMEOUT_MS =
+  Number.isFinite(_timeoutParsed) && _timeoutParsed > 0
+    ? _timeoutParsed
+    : 120_000;
+
+function isAbortError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const name = (err as { name?: string }).name;
+  return name === "AbortError" || name === "TimeoutError";
+}
+
+function apiHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = { ...extra };
+  if (API_KEY) headers["X-API-Key"] = API_KEY;
+  return headers;
+}
 
 export class ApiError extends Error {
   status?: number;
@@ -49,7 +79,10 @@ export type AnalyzeRouteParams = {
   addressA?: string | null;
   addressB?: string | null;
   waypoints?: WaypointSpec[];
-  routingProfile?: RouteAnalyzeRequest["routing_profile"];
+  /** DEPRECATED — use `routingProfiles`. Kept for backwards compat callers. */
+  routingProfile?: RoutingProfile | null;
+  /** Ordered list of routers to call in parallel (first = primary geometry). */
+  routingProfiles?: RoutingProfile[];
   /** Departure timestamp as ISO 8601 string. */
   departAt: string;
   /** Comfort lateral acceleration (m/s²). */
@@ -69,14 +102,25 @@ export type ElevationLookupResult = {
 };
 
 async function postJson<T>(path: string, body: unknown, failLabel: string): Promise<T> {
+  const ctx = beginApiRequest("POST", path, body);
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
-  } catch {
+  } catch (err) {
+    if (isAbortError(err)) {
+      const detail = `Request timed out after ${API_TIMEOUT_MS / 1000}s`;
+      endApiRequestError(ctx, detail);
+      throw new ApiError(detail);
+    }
+    endApiRequestError(
+      ctx,
+      "API injoignable — backend démarré sur le port 8000 ?"
+    );
     throw new ApiError(
       "Cannot reach CycleGen API. Is the backend running?"
     );
@@ -90,10 +134,13 @@ async function postJson<T>(path: string, body: unknown, failLabel: string): Prom
     } catch {
       /* ignore parse errors */
     }
+    endApiRequestError(ctx, detail, res.status);
     throw new ApiError(detail, res.status);
   }
 
-  return res.json() as Promise<T>;
+  const data = (await res.json()) as T;
+  endApiRequestOk(ctx, { status: res.status, data });
+  return data;
 }
 
 /** Resolve a free-text address via Nominatim (POST /api/geocode). */
@@ -141,10 +188,14 @@ export async function analyzeRoute(
     address_a: params.addressA ?? null,
     address_b: params.addressB ?? null,
     waypoints: params.waypoints ?? [],
-    routing_profile: params.routingProfile ?? "Mapbox/Traffic",
     depart_at: params.departAt,
     a_y_mps2: params.aY,
   };
+  if (params.routingProfiles && params.routingProfiles.length > 0) {
+    body.routing_profiles = params.routingProfiles;
+  } else if (params.routingProfile) {
+    body.routing_profile = params.routingProfile;
+  }
 
   return postJson<RouteAnalyzeResponse>(
     "/api/route/analyze",
@@ -174,6 +225,12 @@ export async function buildCorridor(
     enableSpeedLimits?: boolean;
     globalMaxSpeedKmh?: number;
     includeTrafficInEnvelope?: boolean;
+    speedSources?: Array<RouterKey | "osm">;
+    speedCombine?: "min" | "mean_snap" | "majority";
+    elevationSources?: ElevationSourceKey[];
+    elevationCombine?: "mean" | "min" | "max";
+    speedMinKmh?: number | null;
+    speedMaxKmh?: number | null;
   }
 ): Promise<CorridorBuildResponse> {
   const body: CorridorBuildRequest = {
@@ -192,6 +249,12 @@ export async function buildCorridor(
     enable_speed_limits: options?.enableSpeedLimits,
     global_max_speed_kmh: options?.globalMaxSpeedKmh,
     include_traffic_in_envelope: options?.includeTrafficInEnvelope,
+    speed_sources: options?.speedSources,
+    speed_combine: options?.speedCombine,
+    elevation_sources: options?.elevationSources,
+    elevation_combine: options?.elevationCombine,
+    speed_min_kmh: options?.speedMinKmh ?? null,
+    speed_max_kmh: options?.speedMaxKmh ?? null,
   };
 
   return postJson<CorridorBuildResponse>(
@@ -276,13 +339,28 @@ export async function stopSimulation(
 
 /**
  * Build absolute WebSocket URL from a relative ws_path returned by start.
+ * Absolute `ws://` / `wss://` (and any non-`/` path) are rejected — only
+ * server-relative paths are accepted to avoid open-redirect / SSRF-style misuse.
+ * When `wsToken` is set, appends `?token=` or `&token=`.
  */
-export function simulationWsUrl(wsPath: string): string {
-  if (wsPath.startsWith("ws://") || wsPath.startsWith("wss://")) {
-    return wsPath;
+export function simulationWsUrl(wsPath: string, wsToken?: string): string {
+  if (
+    !wsPath ||
+    !wsPath.startsWith("/") ||
+    wsPath.startsWith("//") ||
+    /^wss?:\/\//i.test(wsPath)
+  ) {
+    throw new ApiError(
+      "Invalid WebSocket path: only relative paths starting with / are allowed"
+    );
   }
-  const path = wsPath.startsWith("/") ? wsPath : `/${wsPath}`;
-  return `${WS_URL}${path}`;
+  let url = `${WS_URL}${wsPath}`;
+  const params = new URLSearchParams();
+  if (wsToken) params.set("token", wsToken);
+  if (API_KEY) params.set("api_key", API_KEY);
+  const q = params.toString();
+  if (q) url += `${url.includes("?") ? "&" : "?"}${q}`;
+  return url;
 }
 
 /**
@@ -293,15 +371,21 @@ export async function exportProfile(
   format: ExportFormat = "csv"
 ): Promise<{ blob: Blob; filename: string }> {
   const body: ExportRequest = { profile, format };
+  const ctx = beginApiRequest("POST", "/api/export", body);
 
   let res: Response;
   try {
     res = await fetch(`${API_URL}/api/export`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
   } catch {
+    endApiRequestError(
+      ctx,
+      "API injoignable — backend démarré sur le port 8000 ?"
+    );
     throw new ApiError(
       "Cannot reach CycleGen API. Is the backend running on port 8000?"
     );
@@ -315,6 +399,7 @@ export async function exportProfile(
     } catch {
       /* ignore */
     }
+    endApiRequestError(ctx, detail, res.status);
     throw new ApiError(detail, res.status);
   }
 
@@ -325,6 +410,10 @@ export async function exportProfile(
     `cyclegen_profile.${format === "xml" ? "xml" : "csv"}`;
 
   const blob = await res.blob();
+  endApiRequestOk(ctx, {
+    status: res.status,
+    bytesHint: `${(blob.size / 1024).toFixed(1)} Ko · ${filename}`,
+  });
   return { blob, filename };
 }
 
@@ -341,10 +430,20 @@ export function downloadBlob(blob: Blob, filename: string): void {
 }
 
 async function getJson<T>(path: string, failLabel: string): Promise<T> {
+  const ctx = beginApiRequest("GET", path);
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`);
-  } catch {
+    res = await fetch(`${API_URL}${path}`, {
+      headers: apiHeaders(),
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
+    });
+  } catch (err) {
+    if (isAbortError(err)) {
+      const detail = `Request timed out after ${API_TIMEOUT_MS / 1000}s`;
+      endApiRequestError(ctx, detail);
+      throw new ApiError(detail);
+    }
+    endApiRequestError(ctx, "API injoignable — backend démarré ?");
     throw new ApiError("Cannot reach CycleGen API. Is the backend running?");
   }
   if (!res.ok) {
@@ -359,9 +458,12 @@ async function getJson<T>(path: string, failLabel: string): Promise<T> {
     } catch {
       /* ignore */
     }
+    endApiRequestError(ctx, detail, res.status);
     throw new ApiError(detail, res.status);
   }
-  return res.json() as Promise<T>;
+  const data = (await res.json()) as T;
+  endApiRequestOk(ctx, { status: res.status, data });
+  return data;
 }
 
 /** GET /api/benchmark/sources */
@@ -402,4 +504,4 @@ export async function runBenchmark(params: {
   );
 }
 
-export { API_URL, WS_URL };
+export { API_URL, WS_URL, API_TIMEOUT_MS };

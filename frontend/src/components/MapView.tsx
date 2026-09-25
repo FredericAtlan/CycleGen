@@ -21,7 +21,7 @@ import { DEFAULT_CENTER, DEFAULT_ZOOM } from "@/lib/types";
 import { projectSToLatLon } from "@/components/corridor/geo";
 import { geometrySliceByS, type MapFocusRequest } from "@/lib/mapFocus";
 import { nearestSFromLatLon } from "@/lib/roadLoupe";
-import { alphaToColor } from "@/lib/mapColors";
+import { alphaToPathOptions } from "@/lib/mapColors";
 import type { MapSpeedLayers } from "@/components/MapLayerControls";
 import { DEFAULT_MAP_SPEED_LAYERS } from "@/components/MapLayerControls";
 
@@ -63,7 +63,7 @@ function approxSFromGeometry(geometry: LatLon[]): number[] {
 }
 
 // Re-export for callers that imported from MapView historically.
-export { alphaToColor } from "@/lib/mapColors";
+export { alphaToColor, alphaToPathOptions } from "@/lib/mapColors";
 
 /** Fix broken default marker asset paths under Next.js bundling. */
 function fixLeafletIcons() {
@@ -380,7 +380,10 @@ function SoftPanToCursor({
     // Only nudge the map when the playhead leaves a comfortable inner frame
     const inner = map.getBounds().pad(-0.2);
     if (!inner.contains(ll)) {
-      map.panTo(ll, { animate: true, duration: 0.22 });
+      const reduce =
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      map.panTo(ll, reduce ? { animate: false } : { animate: true, duration: 0.22 });
     }
   }, [enabled, position, map]);
   return null;
@@ -586,23 +589,39 @@ export default function MapView({
   const slopeSegments = useMemo(() => {
     if (!slopeGeom || !slopeAlpha || slopeGeom.length < 2) return null;
     const idxs = downsampleIndices(slopeGeom.length, MAP_POLYLINE_MAX_PTS);
-    type Seg = { positions: LatLngExpression[]; color: string };
+    type Seg = {
+      positions: LatLngExpression[];
+      color: string;
+      weight: number;
+      dashArray?: string;
+      opacity: number;
+    };
     const segs: Seg[] = [];
     let current: Seg | null = null;
     for (let k = 0; k < idxs.length - 1; k++) {
       const i = idxs[k];
       const j = idxs[k + 1];
-      const color = alphaToColor(slopeAlpha[i] ?? 0);
+      const opts = alphaToPathOptions(slopeAlpha[i] ?? 0);
+      const key = `${opts.color}|${opts.weight}|${opts.dashArray ?? ""}`;
       const a = slopeGeom[i];
       const b = slopeGeom[j];
       const pair: LatLngExpression[] = [
         [a.lat, a.lon],
         [b.lat, b.lon],
       ];
-      if (current && current.color === color) {
+      const curKey = current
+        ? `${current.color}|${current.weight}|${current.dashArray ?? ""}`
+        : null;
+      if (current && curKey === key) {
         current.positions.push(pair[1]);
       } else {
-        current = { positions: [...pair], color };
+        current = {
+          positions: [...pair],
+          color: opts.color,
+          weight: opts.weight,
+          dashArray: opts.dashArray,
+          opacity: opts.opacity,
+        };
         segs.push(current);
       }
     }
@@ -807,9 +826,14 @@ export default function MapView({
       {slopeSegments && slopeSegments.length > 0
         ? slopeSegments.map((seg, i) => (
             <Polyline
-              key={`slope-${i}-${seg.color}`}
+              key={`slope-${i}-${seg.color}-${seg.weight}-${seg.dashArray ?? "s"}`}
               positions={seg.positions}
-              pathOptions={{ color: seg.color, weight: 6, opacity: 0.9 }}
+              pathOptions={{
+                color: seg.color,
+                weight: seg.weight,
+                opacity: seg.opacity,
+                dashArray: seg.dashArray,
+              }}
             />
           ))
         : polylinePositions.length >= 2 && (

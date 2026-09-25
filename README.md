@@ -18,6 +18,10 @@ Découpage dépôt, API, frontend shell, moteurs IDM/SUMO, corpus :
 
 → [`docs/architecture.md`](docs/architecture.md)
 
+## Sécurité (exposition locale)
+
+→ [`docs/security.md`](docs/security.md) — bind loopback, caps DoS, stores TTL.
+
 ## Vague 1 — modèle scientifique (limites)
 
 - **Macro** : enveloppe de vitesse via Mapbox `depart_at` (sans token → OSRM free-flow + warning).
@@ -48,18 +52,20 @@ CycleGen/
 ```bash
 cp .env.example .env
 
-# Backend
+# Backend — bind loopback only (no LAN exposure; API has no auth)
 cd backend
 uv venv --python python3 .venv && source .venv/bin/activate
 uv pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 # Frontend (autre terminal)
 cd frontend && npm install && npm run dev
 ```
 
-- API docs : http://localhost:8000/docs  
+- API docs : http://127.0.0.1:8000/docs  
 - UI : http://localhost:3000  
+
+Sécurité / exposition réseau : [`docs/security.md`](docs/security.md).
 
 ### SUMO (optionnel)
 

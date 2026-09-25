@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
+import time
 from typing import Any
 
 import httpx
@@ -16,6 +18,28 @@ logger = logging.getLogger(__name__)
 NOMINATIM_URL = os.getenv(
     "NOMINATIM_URL", "https://nominatim.openstreetmap.org/search"
 ).rstrip("/")
+
+# Nominatim public etiquette: ≤1 request / second (we use 1.1s margin).
+_GEOCODE_MIN_INTERVAL_S = 1.1
+_geocode_lock = threading.Lock()
+_geocode_last_mono = 0.0
+
+
+def _throttle_geocode() -> None:
+    """In-process global rate limit for Nominatim (B10)."""
+    global _geocode_last_mono
+    with _geocode_lock:
+        now = time.monotonic()
+        elapsed = now - _geocode_last_mono
+        if _geocode_last_mono > 0.0 and elapsed < _GEOCODE_MIN_INTERVAL_S:
+            raise HTTPException(
+                status_code=429,
+                detail=(
+                    f"Geocode rate limit: max 1 request / {_GEOCODE_MIN_INTERVAL_S}s "
+                    "(Nominatim etiquette). Retry shortly."
+                ),
+            )
+        _geocode_last_mono = now
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -45,6 +69,8 @@ async def geocode_address(
     q = (query or "").strip()
     if len(q) < 2:
         raise HTTPException(status_code=400, detail="Address query is too short")
+
+    _throttle_geocode()
 
     cc = (countrycodes if countrycodes is not None else os.getenv("GEOCODE_COUNTRYCODES", "fr")).strip()
     params: dict[str, str] = {

@@ -3,6 +3,7 @@ import type { BenchmarkSourceMeta } from "./types";
 export const CORPUS_FAMILY_ORDER = [
   "oem",
   "alpine",
+  "xspace_avl",
   "regulatory",
   "demo",
   "ved",
@@ -12,6 +13,7 @@ export const CORPUS_FAMILY_ORDER = [
 export const CORPUS_FAMILY_LABEL: Record<string, string> = {
   oem: "OEM / constructeur",
   alpine: "Cols alpins (stress freins)",
+  xspace_avl: "AVL XSPACE (calibration)",
   regulatory: "Réglementaire / standard",
   demo: "Démo CycleGen",
   ved: "VED (GPS réel)",

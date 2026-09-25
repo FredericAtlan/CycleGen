@@ -84,13 +84,21 @@ export default function StudioHome() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 items-start justify-center overflow-y-auto bg-slate-50 p-6">
-      <div className="w-full max-w-3xl space-y-6 py-8">
+    <div
+      data-testid="studio-home"
+      className="flex min-h-0 flex-1 items-start justify-center overflow-y-auto bg-slate-50 p-6"
+    >
+      <div className="w-full max-w-2xl space-y-6 py-8">
         <div>
-          <h1 className="text-lg font-bold text-slate-900">CycleGen Studio</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Deux flux : créer un cycle depuis un trajet GPS, ou étudier un
-            roulage existant (temps, vitesse, pente) avec la réponse véhicule.
+          <h1
+            data-testid="studio-home-title"
+            className="text-xl font-bold tracking-tight text-slate-900"
+          >
+            CycleGen
+          </h1>
+          <p className="mt-1.5 text-sm text-slate-500">
+            Deux portes : un trajet GPS, ou une trace (t, v, pente). Bibliothèque
+            et Versus restent dans la barre du haut.
           </p>
         </div>
 
@@ -99,12 +107,12 @@ export default function StudioHome() {
         {sessionOpen && (
           <Link
             href="/?mode=create"
-            className="flex flex-col rounded-xl border border-brand/40 bg-brand/5 p-5 shadow-sm transition hover:border-brand hover:shadow"
+            className="flex flex-col border-l-4 border-brand bg-white py-4 pl-4 pr-5 shadow-sm transition hover:bg-slate-50"
           >
             <span className="text-sm font-semibold text-brand">
               Reprendre le trajet GPS en cours
             </span>
-            <span className="mt-2 text-[13px] leading-snug text-slate-600">
+            <span className="mt-1 text-[13px] leading-snug text-slate-600">
               Corridor, paramètres et profil déjà calculés sont conservés.
             </span>
           </Link>
@@ -113,66 +121,42 @@ export default function StudioHome() {
         <div className="grid gap-4 sm:grid-cols-2">
           <Link
             href="/?mode=create"
-            className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-brand hover:shadow"
+            className="flex flex-col border border-slate-200 bg-white p-5 transition hover:border-slate-400"
           >
-            <span className="text-[10px] font-bold uppercase tracking-wide text-brand">
-              Flux 1
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+              Porte 1
             </span>
             <span className="mt-1 text-sm font-semibold text-slate-900">
-              Créer un cycle depuis un trajet GPS
+              Trajet GPS
             </span>
             <span className="mt-2 text-[13px] leading-snug text-slate-500">
-              Adresses ou coordonnées → corridor → IDM/SUMO → profil, puis
-              puissance / couple (masse, F0, F1, F2, rayon) et enregistrement
-              dans la bibliothèque.
+              Adresses → corridor → IDM/SUMO → profil, puis export et Versus.
             </span>
           </Link>
-          <Link
-            href="/?mode=energy"
-            className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-brand hover:shadow"
-          >
-            <span className="text-[10px] font-bold uppercase tracking-wide text-brand">
-              Flux 2
-            </span>
-            <span className="mt-1 text-sm font-semibold text-slate-900">
-              Créer un cycle depuis une trace (t, v, pente)
-            </span>
-            <span className="mt-2 text-[13px] leading-snug text-slate-500">
-              Importer ou choisir un roulage temps / vitesse / pente, sélectionner
-              le véhicule, puis simuler P et couple aux roues.
-            </span>
-          </Link>
-        </div>
-
-        <Link
-          href="/?mode=energy&corpus=epsim_xspace_grossglockner"
-          className="flex flex-col rounded-xl border border-amber-300 bg-amber-50 p-5 shadow-sm transition hover:border-amber-500 hover:shadow"
-        >
-          <span className="text-[10px] font-bold uppercase tracking-wide text-amber-900">
-            Raccourci · Flux 2
-          </span>
-          <span className="mt-1 text-sm font-semibold text-slate-900">
-            Grossglockner EP-SIM Space (XSPACE) — v / pente
-          </span>
-          <span className="mt-2 text-[13px] leading-snug text-slate-600">
-            Ouvre directement la trace EP-SIM avec le véhicule XSPACE (masse,
-            F0/F1/F2, r_dyn) pour calculer puissance et couple aux roues.
-          </span>
-        </Link>
-
-        <div className="flex flex-wrap gap-3 text-[13px]">
-          <Link
-            href="/?mode=library"
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 hover:border-brand hover:text-brand"
-          >
-            Bibliothèque
-          </Link>
-          <Link
-            href="/compare"
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 hover:border-brand hover:text-brand"
-          >
-            Versus (comparaison)
-          </Link>
+          <div className="flex flex-col border border-slate-200 bg-white p-5">
+            <Link href="/?mode=energy" className="group flex flex-col">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                Porte 2
+              </span>
+              <span className="mt-1 text-sm font-semibold text-slate-900 group-hover:text-brand">
+                Trace (t, v, pente)
+              </span>
+              <span className="mt-2 text-[13px] leading-snug text-slate-500">
+                Importer un roulage, choisir le véhicule, simuler P et couple.
+              </span>
+            </Link>
+            <div className="mt-4 border-t border-slate-100 pt-3">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                Preset
+              </p>
+              <Link
+                href="/?mode=energy&corpus=epsim_xspace_grossglockner"
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 hover:border-slate-400 hover:bg-white"
+              >
+                Grossglockner · XSPACE
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     </div>

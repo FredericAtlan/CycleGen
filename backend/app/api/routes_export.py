@@ -5,9 +5,10 @@ from __future__ import annotations
 import csv
 import io
 import math
+import os
 import xml.etree.ElementTree as ET
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.models.schemas import ExportRequest
@@ -15,9 +16,36 @@ from app.models.schemas import ExportRequest
 router = APIRouter(tags=["export"])
 
 
+def _max_route_points() -> int:
+    return int(os.getenv("CYCLEGEN_MAX_ROUTE_POINTS", "12000"))
+
+
 def _slope_pct(alpha_rad: float) -> float:
     """Road grade in percent: 100 * tan(α)."""
     return math.tan(alpha_rad) * 100.0
+
+
+def _assert_profile_size(body: ExportRequest) -> None:
+    """Reject oversized export payloads before CSV/XML build (DoS S11)."""
+    max_pts = _max_route_points()
+    p = body.profile
+    lengths = {
+        "time": len(p.time),
+        "position": len(p.position),
+        "velocity": len(p.velocity),
+        "acceleration": len(p.acceleration),
+        "slope": len(p.slope),
+    }
+    oversized = {k: n for k, n in lengths.items() if n > max_pts}
+    if oversized:
+        detail = ", ".join(f"{k}={n}" for k, n in oversized.items())
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"export profile too large ({detail}; "
+                f"max {max_pts} via CYCLEGEN_MAX_ROUTE_POINTS)"
+            ),
+        )
 
 
 def _profile_csv(body: ExportRequest) -> tuple[io.StringIO, str]:
@@ -89,6 +117,7 @@ def _profile_xml(body: ExportRequest) -> tuple[io.StringIO, str]:
 @router.post("/export")
 async def export_profile(body: ExportRequest) -> StreamingResponse:
     """Stream a consolidated driving-cycle profile as CSV or XML."""
+    _assert_profile_size(body)
     if body.format == "xml":
         buf, filename = _profile_xml(body)
         media = "application/xml"

@@ -35,7 +35,7 @@ Aide flottante : panneau ~80 % largeur, hors flux de layout.
 ```text
 ┌─ frontend/src ─────────────────────────────────────────────┐
 │  CycleGenShell · Sidebar (étapes 1–4) · MapView            │
-│  ResultsAnalysisPanel · MechanicCharts · HelpDrawer        │
+│  ResultsAnalysisPanel · HelpDrawer        │
 │  lib/api.ts · slopeAlgo · vehiclePower · exportWorkbook    │
 └────────────────────────────────────────────────────────────┘
 

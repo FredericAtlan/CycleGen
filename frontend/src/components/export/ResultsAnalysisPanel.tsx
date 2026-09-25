@@ -4,6 +4,7 @@ import { useMemo, useState, useEffect } from "react";
 import DownloadButtons from "@/components/export/DownloadButtons";
 import SaveCycleButton from "@/components/SaveCycleButton";
 import ResultsAnalyseStudio from "@/components/export/ResultsAnalyseStudio";
+import SafetyAuditBanner from "@/components/scenarios/SafetyAuditBanner";
 import WarningsPanel, {
   trafficSourceBadgeClass,
   trafficSourceLabel,
@@ -41,6 +42,12 @@ export type ResultsAnalysisPanelProps = {
   syncEnabled?: boolean;
   onCursorS?: (s_m: number | null) => void;
   onBrushRangeS?: (range: { s0: number; s1: number } | null) => void;
+  /** Playback playhead time (s). */
+  highlightT?: number | null;
+  /** Pan analyse charts to follow the playhead while replaying. */
+  followPlayhead?: boolean;
+  /** Keyboard scrub / moment jump → seek playhead. */
+  onSeekT?: (t: number) => void;
   trafficSource?: string | null;
   warnings?: CycleGenWarning[];
   driverProfile: DriverProfile;
@@ -106,6 +113,9 @@ export default function ResultsAnalysisPanel({
   syncEnabled = false,
   onCursorS,
   onBrushRangeS,
+  highlightT = null,
+  followPlayhead = false,
+  onSeekT,
   trafficSource = null,
   warnings = [],
   driverProfile,
@@ -439,7 +449,7 @@ export default function ResultsAnalysisPanel({
 
       {!noGps && vehicle && (
         <p className="shrink-0 border-b border-slate-100 px-3 py-1.5 text-[11px] text-slate-500">
-          Véhicule (étape Comportement) :{" "}
+          Véhicule (étape Conducteur) :{" "}
           <span className="font-semibold text-slate-700">
             {vehicle.name} · {vehicle.code} · {vehicle.massCode}{" "}
             {Math.round(vehicle.mass_kg)} kg · F0={vehicle.f0_n} N
@@ -447,6 +457,8 @@ export default function ResultsAnalysisPanel({
           {" — "}courbes P / couple aux roues ci-dessous.
         </p>
       )}
+
+      <SafetyAuditBanner profile={profile} />
 
       <ResultsAnalyseStudio
         rows={inspectRows}
@@ -459,6 +471,9 @@ export default function ResultsAnalysisPanel({
         syncEnabled={noGps ? false : syncEnabled}
         onCursorS={noGps ? undefined : onCursorS}
         onBrushRangeS={noGps ? undefined : onBrushRangeS}
+        highlightT={highlightT}
+        followPlayhead={followPlayhead}
+        onSeekT={onSeekT}
         warnings={displayWarnings}
         noGps={noGps}
         hasVehicle={vehicle != null}

@@ -11,6 +11,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent,
   type MouseEvent,
 } from "react";
 import { toJpeg } from "html-to-image";
@@ -223,6 +224,8 @@ function FocusChart({
   rollingLabel,
   windowBand,
   hoverT,
+  highlightT = null,
+  followPlayhead = false,
   onHoverT,
   meanLabel,
   onBrushX,
@@ -243,6 +246,10 @@ function FocusChart({
   rollingLabel: string;
   windowBand: [number, number] | null;
   hoverT: number | null;
+  /** Playback playhead time (s); takes precedence over hover when set. */
+  highlightT?: number | null;
+  /** When true, pan the time window so the playhead stays visible. */
+  followPlayhead?: boolean;
   onHoverT: (t: number | null) => void;
   meanLabel?: string;
   onBrushX: (t0: number, t1: number) => void;
@@ -250,6 +257,8 @@ function FocusChart({
   speedLimits?: SpeedLimitFlags | null;
   onWheelZoom?: (anchorT: number, deltaY: number) => void;
 }) {
+  const cursorT = highlightT ?? hoverT;
+  const playheadOn = Boolean(followPlayhead && highlightT != null);
   const pMeta = inspectSeriesMeta(primary);
   const sMeta = secondary ? inspectSeriesMeta(secondary) : null;
   const dual = Boolean(secondary && secondary !== primary);
@@ -583,13 +592,25 @@ function FocusChart({
                 }}
               />
             ))}
-            {hoverT != null && !draggingY && (
+            {cursorT != null && !draggingY && (
               <ReferenceLine
                 yAxisId="left"
-                x={hoverT}
-                stroke="#94a3b8"
-                strokeWidth={1}
-                strokeDasharray="2 2"
+                x={cursorT}
+                stroke={playheadOn ? "#4338ca" : highlightT != null ? "#0f172a" : "#94a3b8"}
+                strokeWidth={playheadOn ? 2 : highlightT != null ? 1.5 : 1}
+                strokeDasharray={playheadOn ? undefined : highlightT != null ? "4 3" : "2 2"}
+                ifOverflow="extendDomain"
+                label={
+                  playheadOn
+                    ? {
+                        value: formatTimeLabel(cursorT),
+                        position: "insideTopLeft",
+                        fill: "#4338ca",
+                        fontSize: 10,
+                        fontWeight: 700,
+                      }
+                    : undefined
+                }
               />
             )}
             {showSpeedLimits &&
@@ -669,6 +690,8 @@ function CompareCell({
   onBrushX,
   speedLimits,
   onWheelZoom,
+  highlightT = null,
+  followPlayhead = false,
 }: {
   data: ChartPoint[];
   seriesId: InspectSeriesId;
@@ -683,12 +706,16 @@ function CompareCell({
   onBrushX: (t0: number, t1: number) => void;
   speedLimits?: SpeedLimitFlags | null;
   onWheelZoom?: (anchorT: number, deltaY: number) => void;
+  highlightT?: number | null;
+  followPlayhead?: boolean;
 }) {
   const m = inspectSeriesMeta(seriesId);
   const [dragX0, setDragX0] = useState<number | null>(null);
   const [dragX1, setDragX1] = useState<number | null>(null);
   const showSpeedLimits = seriesId === "v_kmh" && Boolean(speedLimits);
   const plotRef = useRef<HTMLDivElement | null>(null);
+  const playheadOn = Boolean(followPlayhead && highlightT != null);
+  const cursorT = highlightT;
 
   const clientXToT = useCallback(
     (clientX: number): number | null => {
@@ -822,6 +849,15 @@ function CompareCell({
                 strokeWidth={1}
               />
             ))}
+            {cursorT != null && (
+              <ReferenceLine
+                x={cursorT}
+                stroke={playheadOn ? "#4338ca" : "#0f172a"}
+                strokeWidth={playheadOn ? 2 : 1.25}
+                strokeDasharray={playheadOn ? undefined : "4 3"}
+                ifOverflow="extendDomain"
+              />
+            )}
             {showSpeedLimits &&
               speedLimits &&
               SPEED_LIMIT_OVERLAYS.map((s) => {
@@ -880,6 +916,12 @@ export type ResultsAnalyseStudioProps = {
   syncEnabled?: boolean;
   onCursorS?: (s_m: number | null) => void;
   onBrushRangeS?: (range: { s0: number; s1: number } | null) => void;
+  /** Playback playhead time (s) — drives the vertical cursor on analyse charts. */
+  highlightT?: number | null;
+  /** Pan zoom window to keep the playhead in view while replaying. */
+  followPlayhead?: boolean;
+  /** Keyboard scrub: seek playhead to absolute time (s). */
+  onSeekT?: (t: number) => void;
   warnings?: CycleGenWarning[];
   noGps?: boolean;
   hasVehicle?: boolean;
@@ -906,6 +948,9 @@ export default function ResultsAnalyseStudio({
   syncEnabled = true,
   onCursorS,
   onBrushRangeS,
+  highlightT = null,
+  followPlayhead = false,
+  onSeekT,
   warnings = [],
   noGps = false,
   hasVehicle = true,
@@ -976,6 +1021,52 @@ export default function ResultsAnalyseStudio({
     if (zoomMode === "window") return [winT0, winT1];
     return [tMin, tMax];
   }, [linkCharts, viewMode, zoomMode, winT0, winT1, tMin, tMax]);
+
+  // Keep the playhead inside the visible time window while replaying.
+  useEffect(() => {
+    if (!followPlayhead || highlightT == null || !Number.isFinite(highlightT)) {
+      return;
+    }
+    const span = Math.max(5, clampedWidth);
+    const [x0, x1] =
+      zoomMode === "window" ? [winT0, winT1] : [tMin, tMax];
+    // If full-trip view and playhead is on-screen, nothing to do.
+    if (zoomMode !== "window") {
+      // Auto-engage a sliding window for long trips so the cursor "animates"
+      // through a readable zoom rather than a static full-span line.
+      const reduce =
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (!reduce && tripSpan > 90) {
+        const w = Math.min(60, Math.max(20, tripSpan * 0.15));
+        const start = Math.min(
+          Math.max(tMin, highlightT - w * 0.35),
+          Math.max(tMin, tMax - w)
+        );
+        setDisplayWidth(w);
+        setWindowStartT(start);
+        setZoomMode("window");
+      }
+      return;
+    }
+    const margin = (x1 - x0) * 0.2;
+    if (highlightT >= x0 + margin && highlightT <= x1 - margin) return;
+    const nextStart = Math.min(
+      Math.max(tMin, highlightT - span * 0.35),
+      Math.max(tMin, tMax - span)
+    );
+    setWindowStartT(nextStart);
+  }, [
+    followPlayhead,
+    highlightT,
+    zoomMode,
+    winT0,
+    winT1,
+    tMin,
+    tMax,
+    clampedWidth,
+    tripSpan,
+  ]);
 
   /** Stats / legend window = display window when zoomed, else full trip. */
   const statsRange = useMemo((): [number, number] => {
@@ -1140,7 +1231,46 @@ export default function ResultsAnalyseStudio({
     setWindowStartT(start);
     setZoomMode("window");
     handleHoverT(t);
+    onSeekT?.(t);
   };
+
+  const scrubPlayhead = useCallback(
+    (deltaS: number) => {
+      const base =
+        highlightT != null && Number.isFinite(highlightT)
+          ? highlightT
+          : hoverT != null && Number.isFinite(hoverT)
+            ? hoverT
+            : tMin;
+      const next = Math.max(tMin, Math.min(tMax, base + deltaS));
+      handleHoverT(next);
+      onSeekT?.(next);
+    },
+    [highlightT, hoverT, tMin, tMax, handleHoverT, onSeekT]
+  );
+
+  const onChartKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        scrubPlayhead(e.shiftKey ? -5 : -1);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        scrubPlayhead(e.shiftKey ? 5 : 1);
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        handleHoverT(tMin);
+        onSeekT?.(tMin);
+      } else if (e.key === "End") {
+        e.preventDefault();
+        handleHoverT(tMax);
+        onSeekT?.(tMax);
+      }
+    },
+    [scrubPlayhead, handleHoverT, onSeekT, tMin, tMax]
+  );
 
   const chartSeriesIds = useMemo(() => {
     if (viewMode === "compare") {
@@ -1892,7 +2022,11 @@ export default function ResultsAnalyseStudio({
 
               <div
                 ref={exportRef}
-                className={`min-h-0 flex-1 ${
+                tabIndex={0}
+                role="region"
+                aria-label="Graphiques d'analyse — flèches pour scrubber, Shift+flèche ±5 s"
+                onKeyDown={onChartKeyDown}
+                className={`min-h-0 flex-1 outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 ${
                   viewMode === "compare"
                     ? "grid grid-cols-2 grid-rows-2 gap-1.5"
                     : ""
@@ -1913,6 +2047,8 @@ export default function ResultsAnalyseStudio({
                     rollingLabel={rollingLabel}
                     windowBand={windowBand}
                     hoverT={hoverT}
+                    highlightT={highlightT}
+                    followPlayhead={followPlayhead}
                     onHoverT={handleHoverT}
                     meanLabel={meanLabel}
                     onBrushX={applyBrushX}
@@ -1941,6 +2077,8 @@ export default function ResultsAnalyseStudio({
                         id === "v_kmh" && hasSpeedLimits ? speedLimitsOn : null
                       }
                       onWheelZoom={applyWheelZoom}
+                      highlightT={highlightT}
+                      followPlayhead={followPlayhead}
                     />
                   ))
                 )}
