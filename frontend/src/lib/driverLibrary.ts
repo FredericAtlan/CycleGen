@@ -93,7 +93,12 @@ function normalize(raw: unknown): SavedDriver | null {
   if (!id || !name) return null;
   const bp = raw.baseProfile;
   const baseProfile: DriverProfile =
-    bp === "Eco" || bp === "Normal" || bp === "Agressif" || bp === "Sportif"
+    bp === "Eco" ||
+    bp === "Normal" ||
+    bp === "Agressif" ||
+    bp === "Sportif" ||
+    bp === "Prudent" ||
+    bp === "Dynamique"
       ? bp
       : "Normal";
   const createdAt =

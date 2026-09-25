@@ -12,13 +12,21 @@ export type RoutePoint = LatLon & {
 
 export type RoutingProfile = "Car/OSRM" | "Mapbox/Traffic" | "HERE/ADAS";
 
-export type DriverProfile = "Eco" | "Normal" | "Agressif" | "Sportif";
+export type DriverProfile =
+  | "Eco"
+  | "Normal"
+  | "Agressif"
+  | "Sportif"
+  | "Prudent"
+  | "Dynamique";
 
 export const DRIVER_PROFILES: DriverProfile[] = [
   "Eco",
   "Normal",
   "Agressif",
   "Sportif",
+  "Prudent",
+  "Dynamique",
 ];
 
 export type CycleGenWarning = {
@@ -161,6 +169,22 @@ export type RouteAnalyzeResponse = {
   elevations_by_source?: Partial<Record<ElevationSourceKey, number[]>>;
   /** Per-router outcome tag: 'ok' | 'skipped:no_key' | 'error:...'. */
   router_status?: Partial<Record<RouterKey, string>>;
+  /** Upstream hops (HERE, Mapbox, OSRM…) for the API console. */
+  connection_log?: ConnectionLogEntry[];
+};
+
+export type ConnectionLogEntry = {
+  t_ms: number;
+  provider: string;
+  phase: string;
+  method?: string;
+  host?: string;
+  path?: string;
+  url?: string;
+  status?: number | string | null;
+  duration_ms?: number | null;
+  detail?: string | null;
+  bytes_hint?: string | null;
 };
 
 export const MAX_WAYPOINTS = 20;
@@ -321,6 +345,8 @@ export type SimulateStartResponse = {
   simulation_id: string;
   engine: SimEngine;
   ws_path: string;
+  /** Short-lived token required as `?token=` on the WebSocket URL. */
+  ws_token: string;
   /** Present when IDM finished inside /start — consolidate via /stop immediately. */
   status?: "running" | "completed" | "failed" | "stopped";
 };

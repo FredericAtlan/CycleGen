@@ -22,6 +22,10 @@ _PROFILE_FILES: dict[str, str] = {
     "aggressive": "agressif.json",
     "sportif": "sportif.json",
     "sport": "sportif.json",
+    # AVL XSPACE styles → nearest existing TPM.
+    "prudent": "eco.json",
+    "dynamique": "sportif.json",
+    "dynamic": "sportif.json",
 }
 
 

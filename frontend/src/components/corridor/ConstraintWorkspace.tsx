@@ -452,6 +452,9 @@ export default function ConstraintWorkspace(props: ConstraintWorkspaceProps) {
                     slopeUnit={slopeUnit}
                     onSlopeUnitChange={onSlopeUnitChange}
                     tall
+                    highlightS={highlightS}
+                    onCursorS={onCursorS}
+                    syncEnabled
                   />
                 )}
               >
@@ -459,6 +462,9 @@ export default function ConstraintWorkspace(props: ConstraintWorkspaceProps) {
                   corridor={corridor}
                   slopeUnit={slopeUnit}
                   onSlopeUnitChange={onSlopeUnitChange}
+                  highlightS={highlightS}
+                  onCursorS={onCursorS}
+                  syncEnabled
                 />
               </ChartFocusSlot>
               <ChartFocusSlot
@@ -471,6 +477,9 @@ export default function ConstraintWorkspace(props: ConstraintWorkspaceProps) {
                     tall
                     trapLengthM={trapLengthM}
                     meta={meta ?? null}
+                    highlightS={highlightS}
+                    onCursorS={onCursorS}
+                    syncEnabled
                   />
                 )}
               >
@@ -478,6 +487,9 @@ export default function ConstraintWorkspace(props: ConstraintWorkspaceProps) {
                   corridor={corridor}
                   trapLengthM={trapLengthM}
                   meta={meta ?? null}
+                  highlightS={highlightS}
+                  onCursorS={onCursorS}
+                  syncEnabled
                 />
               </ChartFocusSlot>
             </div>

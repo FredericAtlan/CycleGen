@@ -111,10 +111,18 @@ function renderMarkdown(md: string): string {
           .replace(/>/g, "&gt;")
           .replace(/`([^`]+)`/g, "<code>$1</code>")
           .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-          .replace(
-            /\[([^\]]+)\]\(([^)]+)\)/g,
-            '<a href="$2" target="_blank" rel="noreferrer">$1</a>'
-          );
+          .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label: string, href: string) => {
+            const trimmed = String(href).trim();
+            if (!/^(https?:\/\/|\/|#)/i.test(trimmed)) {
+              return label;
+            }
+            const safe = trimmed
+              .replace(/&/g, "&amp;")
+              .replace(/"/g, "&quot;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;");
+            return `<a href="${safe}" target="_blank" rel="noreferrer">${label}</a>`;
+          });
       })
       .join("");
 
@@ -249,6 +257,7 @@ export default function HelpDrawer() {
 
   return (
     <div
+      data-testid="help-drawer"
       className="fixed inset-0 z-[80] flex justify-end"
       role="dialog"
       aria-modal="true"

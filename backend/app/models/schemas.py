@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class DriverProfile(str, Enum):
@@ -14,6 +14,9 @@ class DriverProfile(str, Enum):
     NORMAL = "Normal"
     AGRESSIF = "Agressif"
     SPORTIF = "Sportif"
+    # AVL Route Studio XSPACE fingerprints (batch Sep 2026).
+    PRUDENT = "Prudent"
+    DYNAMIQUE = "Dynamique"
 
 
 class RoutingProfile(str, Enum):
@@ -233,6 +236,14 @@ class RouteAnalyzeResponse(BaseModel):
             "Per-router outcome tag: 'ok' | 'skipped:no_key' | 'error:<msg>'."
         ),
     )
+    connection_log: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description=(
+            "Upstream hops during this request (HERE, Mapbox, OSRM, Overpass…). "
+            "Each entry: provider, phase, host, url (secrets redacted), status, "
+            "duration_ms — for the Studio API console."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -428,6 +439,34 @@ class SpatialCorridor(BaseModel):
     a_y_mps2: float = 2.5
     slope_profile: SlopeProfile | None = None
 
+    @model_validator(mode="after")
+    def _parallel_arrays_match(self) -> SpatialCorridor:
+        n = len(self.S)
+        required = {
+            "alpha": self.alpha,
+            "V_limite": self.V_limite,
+        }
+        for name, arr in required.items():
+            if len(arr) != n:
+                raise ValueError(
+                    f"SpatialCorridor.{name} length {len(arr)} != len(S)={n}"
+                )
+        # Optional parallel series: empty means "absent"; non-empty must match S.
+        optional = {
+            "V_limite_legal": self.V_limite_legal,
+            "V_traffic": self.V_traffic,
+            "V_curve": self.V_curve,
+            "V_envelope": self.V_envelope,
+            "elevations_m": self.elevations_m,
+            "geometry": self.geometry,
+        }
+        for name, arr in optional.items():
+            if arr and len(arr) != n:
+                raise ValueError(
+                    f"SpatialCorridor.{name} length {len(arr)} != len(S)={n}"
+                )
+        return self
+
 
 class CorridorBuildResponse(BaseModel):
     corridor: SpatialCorridor
@@ -545,6 +584,13 @@ class SimulateStartResponse(BaseModel):
     simulation_id: str
     engine: Literal["sumo", "idm"]
     ws_path: str
+    ws_token: str = Field(
+        ...,
+        description=(
+            "One-time access token for the WebSocket stream. "
+            "Pass as query param ``?token=`` on ``ws_path``."
+        ),
+    )
     # IDM finishes inside /start; client can POST /stop immediately for the full profile.
     status: Literal["running", "completed", "failed", "stopped"] = "running"
 
@@ -568,12 +614,16 @@ class SimulationFrame(BaseModel):
     tls_state: str | None = None
 
 
+# Soft pydantic ceiling aligned with CYCLEGEN_MAX_ROUTE_POINTS default (export also validates).
+_MAX_PROFILE_POINTS = 12_000
+
+
 class ConsolidatedProfile(BaseModel):
-    time: list[float]
-    velocity: list[float]
-    position: list[float]
-    acceleration: list[float]
-    slope: list[float]
+    time: list[float] = Field(..., max_length=_MAX_PROFILE_POINTS)
+    velocity: list[float] = Field(..., max_length=_MAX_PROFILE_POINTS)
+    position: list[float] = Field(..., max_length=_MAX_PROFILE_POINTS)
+    acceleration: list[float] = Field(..., max_length=_MAX_PROFILE_POINTS)
+    slope: list[float] = Field(..., max_length=_MAX_PROFILE_POINTS)
     total_duration_s: float
     average_speed_kmh: float
     status: Literal["completed", "stopped", "failed"] = "completed"
@@ -808,15 +858,15 @@ class N90CalibrateRequest(BaseModel):
         le=5.0,
         description="Weight on |ΔT_total_pct| in the objective.",
     )
-    # Grid overrides — omit to use compact defaults.
-    a_max_grid: list[float] | None = None
-    b_comf_grid: list[float] | None = None
-    T_grid: list[float] | None = None
-    T_h_grid: list[float] | None = None
-    s0_grid: list[float] | None = None
-    jerk_max_grid: list[float] | None = None
-    jerk_brake_max_grid: list[float] | None = None
-    speed_factor_grid: list[float] | None = None
+    # Grid overrides — omit to use compact defaults (per-axis max 32).
+    a_max_grid: list[float] | None = Field(default=None, max_length=32)
+    b_comf_grid: list[float] | None = Field(default=None, max_length=32)
+    T_grid: list[float] | None = Field(default=None, max_length=32)
+    T_h_grid: list[float] | None = Field(default=None, max_length=32)
+    s0_grid: list[float] | None = Field(default=None, max_length=32)
+    jerk_max_grid: list[float] | None = Field(default=None, max_length=32)
+    jerk_brake_max_grid: list[float] | None = Field(default=None, max_length=32)
+    speed_factor_grid: list[float] | None = Field(default=None, max_length=32)
     max_arms: int = Field(
         96,
         ge=1,

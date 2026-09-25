@@ -1,20 +1,18 @@
-"""Multi-router orchestrator: parallel HERE + Mapbox + OSRM with S-alignment.
+"""Multi-router orchestrator: HERE-first sequential fallback + optional secondaries.
 
-The primary router (first in the ordered list) dictates the geometry / S-axis.
-Secondary routers' vertex-level V_legal, V_traffic and Z are projected onto
-that primary axis via nearest-S mapping.
+Primary geometry
+----------------
+Try routers one-by-one along the attempt chain (default HERE → Mapbox → OSRM)
+until one succeeds. No parallel fan-out for the primary route.
 
-Layered goals
--------------
-1. Ergonomics: the UI ticks a set of routers, backend returns per-router series
-   ready to combine into V_legal = combine(cochés).
-2. Robustness: routers with missing keys / API errors don't crash the request;
-   they surface as ``router_status`` entries so the UI can hint the user.
-3. No duplicate work: OSM maxspeed enrichment stays in ``data_fetcher`` on the
-   primary bbox; router services only fetch what they know natively.
+Secondary sources
+-----------------
+Only when the UI explicitly ticks **more than one** router: fetch the other
+selected routers in parallel and project their V_legal / Z onto the primary
+S-axis for the Contraintes workspace. Silent fallbacks used solely to rescue
+a failed primary are not treated as secondaries.
 
-The service is intentionally stateless: hand it an async client and it returns
-``MultiRouteResult`` with per-router payloads and the composed primary payload.
+Robustness: missing keys / API errors surface as ``router_status`` entries.
 """
 
 from __future__ import annotations
@@ -42,7 +40,7 @@ ROUTER_KEY: dict[RoutingProfile, str] = {
     RoutingProfile.CAR_OSRM: "osrm",
 }
 
-# Preferred primary order when the caller passes an empty list.
+# Preferred primary order + silent fallback chain after an explicit selection fails.
 DEFAULT_PRIORITY: list[RoutingProfile] = [
     RoutingProfile.HERE_ADAS,
     RoutingProfile.MAPBOX_TRAFFIC,
@@ -72,7 +70,7 @@ def resolve_router_selection(
 ) -> list[RoutingProfile]:
     """Order & filter routers, keeping only those with runtime availability.
 
-    - Preserves caller order (first = primary).
+    - Preserves caller order (first = preferred primary).
     - If nothing is passed, uses ``DEFAULT_PRIORITY`` filtered by availability.
     - Guarantees at least one entry — falls back to OSRM.
     """
@@ -88,6 +86,32 @@ def resolve_router_selection(
     if not ordered:
         ordered = [RoutingProfile.CAR_OSRM]
     return ordered
+
+
+def primary_attempt_order(
+    requested: Iterable[RoutingProfile] | None,
+) -> list[RoutingProfile]:
+    """HERE-first attempt chain: explicit selection, then silent fallbacks.
+
+    Example: UI ticks only HERE → try HERE, then Mapbox, then OSRM.
+    Example: UI ticks Mapbox+OSRM → try Mapbox, OSRM, then HERE if available.
+    """
+    explicit = resolve_router_selection(requested)
+    chain: list[RoutingProfile] = []
+    seen: set[RoutingProfile] = set()
+    for p in explicit:
+        if p in seen or not router_available(p):
+            continue
+        seen.add(p)
+        chain.append(p)
+    for p in DEFAULT_PRIORITY:
+        if p in seen or not router_available(p):
+            continue
+        seen.add(p)
+        chain.append(p)
+    if not chain:
+        chain = [RoutingProfile.CAR_OSRM]
+    return chain
 
 
 # ---------------------------------------------------------------------------
@@ -252,9 +276,81 @@ def _vertex_to_segment_speeds(vertex_speeds: list[float]) -> list[float]:
     return list(vertex_speeds[:-1])
 
 
+
 # ---------------------------------------------------------------------------
 # Public orchestrator
 # ---------------------------------------------------------------------------
+
+
+def _attach_primary_series(
+    *,
+    primary: RouteTrafficResult,
+    n_primary: int,
+    key: str,
+    legal_by_router: dict[str, list[float]],
+    traffic_by_router: dict[str, list[float]],
+    elevations_by_source: dict[str, list[float]],
+) -> None:
+    legal_by_router[key] = _segment_speeds_to_vertex(
+        n_primary, primary.segment_speeds_legal_mps
+    )
+    traffic_by_router[key] = _segment_speeds_to_vertex(
+        n_primary, primary.segment_speeds_traffic_mps
+    )
+    if primary.elevations_m and len(primary.elevations_m) == n_primary:
+        elevations_by_source[key] = [float(z) for z in primary.elevations_m]
+
+
+def _project_secondary(
+    *,
+    primary: RouteTrafficResult,
+    primary_S: list[float],
+    key: str,
+    res: RouteTrafficResult,
+    legal_by_router: dict[str, list[float]],
+    traffic_by_router: dict[str, list[float]],
+    elevations_by_source: dict[str, list[float]],
+    warnings: list[CycleGenWarning],
+) -> None:
+    sec_S = _cumulative_S(res.geometry, res.segment_distances_m)
+    sec_legal_vertex = _segment_speeds_to_vertex(
+        len(res.geometry), res.segment_speeds_legal_mps
+    )
+    sec_traffic_vertex = _segment_speeds_to_vertex(
+        len(res.geometry), res.segment_speeds_traffic_mps
+    )
+    legal_by_router[key] = _project_vertex_series_onto_primary(
+        primary.geometry,
+        primary_S,
+        res.geometry,
+        sec_S,
+        sec_legal_vertex,
+    )
+    traffic_by_router[key] = _project_vertex_series_onto_primary(
+        primary.geometry,
+        primary_S,
+        res.geometry,
+        sec_S,
+        sec_traffic_vertex,
+    )
+    if res.elevations_m and len(res.elevations_m) == len(res.geometry):
+        elevations_by_source[key] = _project_vertex_series_onto_primary(
+            primary.geometry,
+            primary_S,
+            res.geometry,
+            sec_S,
+            [float(z) for z in res.elevations_m],
+        )
+    for w in res.warnings:
+        warnings.append(
+            CycleGenWarning(
+                code=f"router_secondary:{key}:{w.code}",
+                message=f"[{key}] {w.message}",
+                s0=w.s0,
+                s1=w.s1,
+                source=w.source,
+            )
+        )
 
 
 async def analyze_multi_router(
@@ -268,141 +364,164 @@ async def analyze_multi_router(
     request_json: Callable[..., Awaitable[Any]] | None,
     osrm_base_url: str,
 ) -> MultiRouteResult:
-    """Fan-out to every configured router, keep the primary geometry, project rest."""
-    profiles = resolve_router_selection(requested_profiles)
+    """Resolve geometry with HERE-first sequential fallback; optional secondaries."""
+    from app.services.connection_log import record
+
+    requested_list = list(requested_profiles) if requested_profiles else []
+    explicit = resolve_router_selection(requested_list or None)
+    attempt_order = primary_attempt_order(requested_list or None)
+
+    record(
+        provider="CycleGen",
+        phase="info",
+        detail=(
+            "Chaîne de tentative : "
+            + " → ".join(ROUTER_KEY[p] for p in attempt_order)
+        ),
+    )
 
     router_status: dict[str, str] = {}
-    tasks: list[asyncio.Task[RouteTrafficResult] | None] = []
-    active_profiles: list[RoutingProfile] = []
+    primary_profile: RoutingProfile | None = None
+    primary: RouteTrafficResult | None = None
+    first_error: Exception | None = None
 
-    for profile in profiles:
+    for profile in attempt_order:
         key = ROUTER_KEY[profile]
         if not router_available(profile):
             router_status[key] = "skipped:no_key"
+            record(
+                provider=key.upper() if key != "here" else "HERE",
+                phase="info",
+                detail=f"Ignoré (pas de clé API) — {profile.value}",
+                status="skipped:no_key",
+            )
             continue
+        provider_label = {
+            "here": "HERE",
+            "mapbox": "Mapbox",
+            "osrm": "OSRM",
+        }.get(key, key)
+        record(
+            provider=provider_label,
+            phase="info",
+            detail=f"Tentative primaire · {profile.value}",
+        )
         router = _build_router(
             profile,
             client=client,
             request_json=request_json,
             osrm_base_url=osrm_base_url,
         )
-        tasks.append(
-            asyncio.create_task(
-                router.route(start, end, vias=vias, depart_at=depart_at),
-                name=f"router:{key}",
-            )
-        )
-        active_profiles.append(profile)
-
-    if not tasks:
-        # Force OSRM as a last resort to keep the pipeline alive.
-        active_profiles = [RoutingProfile.CAR_OSRM]
-        osrm = OsrmRouter(
-            base_url=osrm_base_url, client=client, request_json=request_json
-        )
-        tasks = [
-            asyncio.create_task(
-                osrm.route(start, end, vias=vias, depart_at=depart_at),
-                name="router:osrm",
-            )
-        ]
-
-    results: list[tuple[RoutingProfile, RouteTrafficResult | Exception]] = []
-    gathered = await asyncio.gather(*tasks, return_exceptions=True)
-    for profile, res in zip(active_profiles, gathered):
-        results.append((profile, res))
-
-    # Pick primary: first successful in requested order.
-    primary_profile: RoutingProfile | None = None
-    primary: RouteTrafficResult | None = None
-    for profile, res in results:
-        key = ROUTER_KEY[profile]
-        if isinstance(res, Exception):
-            msg = str(res)[:200]
+        try:
+            res = await router.route(start, end, vias=vias, depart_at=depart_at)
+        except Exception as exc:  # noqa: BLE001 — collect & continue chain
+            msg = str(exc)[:200]
             router_status[key] = f"error:{msg}"
-            logger.warning("Router %s failed: %s", key, msg)
+            logger.warning("Router %s failed (fallback continues): %s", key, msg)
+            record(
+                provider=provider_label,
+                phase="error",
+                detail=f"Échec · bascule suivante — {msg}",
+                status="error",
+            )
+            if first_error is None:
+                first_error = exc
             continue
         router_status[key] = "ok"
-        if primary_profile is None:
-            primary_profile = profile
-            primary = res
+        primary_profile = profile
+        primary = res
+        record(
+            provider=provider_label,
+            phase="ok",
+            detail=(
+                f"Géométrie primaire · {len(res.geometry)} pts · "
+                f"{res.distance_m / 1000:.1f} km · source={res.traffic_source}"
+            ),
+            status="ok",
+        )
+        if explicit and profile not in explicit:
+            primary.warnings = list(primary.warnings) + [
+                CycleGenWarning(
+                    code="router_fallback",
+                    message=(
+                        "Routeur demandé indisponible — géométrie fournie par "
+                        f"{key} (chaîne HERE → Mapbox → OSRM)."
+                    ),
+                    source=key,
+                )
+            ]
+        break
 
     if primary is None or primary_profile is None:
-        # All routers failed — raise the first exception for observability.
-        for _, res in results:
-            if isinstance(res, Exception):
-                raise res
+        if first_error is not None:
+            raise first_error
         raise RuntimeError("No router returned a valid result")
 
-    # Primary S-axis.
     primary_S = _cumulative_S(primary.geometry, primary.segment_distances_m)
     n_primary = len(primary.geometry)
 
-    # Per-router aligned series.
     legal_by_router: dict[str, list[float]] = {}
     traffic_by_router: dict[str, list[float]] = {}
     elevations_by_source: dict[str, list[float]] = {}
-    routers_used: list[str] = []
+    routers_used: list[str] = [ROUTER_KEY[primary_profile]]
     warnings: list[CycleGenWarning] = list(primary.warnings)
 
-    for profile, res in results:
-        key = ROUTER_KEY[profile]
-        if isinstance(res, Exception):
-            continue
-        routers_used.append(key)
-        if profile == primary_profile:
-            legal_vertex = _segment_speeds_to_vertex(
-                n_primary, res.segment_speeds_legal_mps
-            )
-            traffic_vertex = _segment_speeds_to_vertex(
-                n_primary, res.segment_speeds_traffic_mps
-            )
-            legal_by_router[key] = legal_vertex
-            traffic_by_router[key] = traffic_vertex
-            if res.elevations_m and len(res.elevations_m) == n_primary:
-                elevations_by_source[key] = [float(z) for z in res.elevations_m]
-            continue
+    _attach_primary_series(
+        primary=primary,
+        n_primary=n_primary,
+        key=ROUTER_KEY[primary_profile],
+        legal_by_router=legal_by_router,
+        traffic_by_router=traffic_by_router,
+        elevations_by_source=elevations_by_source,
+    )
 
-        # Secondary → project on primary S.
-        sec_S = _cumulative_S(res.geometry, res.segment_distances_m)
-        sec_legal_vertex = _segment_speeds_to_vertex(
-            len(res.geometry), res.segment_speeds_legal_mps
-        )
-        sec_traffic_vertex = _segment_speeds_to_vertex(
-            len(res.geometry), res.segment_speeds_traffic_mps
-        )
-        legal_by_router[key] = _project_vertex_series_onto_primary(
-            primary.geometry,
-            primary_S,
-            res.geometry,
-            sec_S,
-            sec_legal_vertex,
-        )
-        traffic_by_router[key] = _project_vertex_series_onto_primary(
-            primary.geometry,
-            primary_S,
-            res.geometry,
-            sec_S,
-            sec_traffic_vertex,
-        )
-        if res.elevations_m and len(res.elevations_m) == len(res.geometry):
-            elevations_by_source[key] = _project_vertex_series_onto_primary(
-                primary.geometry,
-                primary_S,
-                res.geometry,
-                sec_S,
-                [float(z) for z in res.elevations_m],
+    # Multi-compare only when the UI explicitly ticks ≥2 routers.
+    # Silent fallback (HERE down → Mapbox) must not re-fetch the failed primary.
+    secondaries = (
+        [p for p in explicit if p != primary_profile] if len(explicit) > 1 else []
+    )
+    if secondaries:
+        tasks: list[asyncio.Task[RouteTrafficResult]] = []
+        active: list[RoutingProfile] = []
+        for profile in secondaries:
+            key = ROUTER_KEY[profile]
+            if not router_available(profile):
+                router_status.setdefault(key, "skipped:no_key")
+                continue
+            router = _build_router(
+                profile,
+                client=client,
+                request_json=request_json,
+                osrm_base_url=osrm_base_url,
             )
-        for w in res.warnings:
-            warnings.append(
-                CycleGenWarning(
-                    code=f"router_secondary:{key}:{w.code}",
-                    message=f"[{key}] {w.message}",
-                    s0=w.s0,
-                    s1=w.s1,
-                    source=w.source,
+            tasks.append(
+                asyncio.create_task(
+                    router.route(start, end, vias=vias, depart_at=depart_at),
+                    name=f"router-secondary:{key}",
                 )
             )
+            active.append(profile)
+        if tasks:
+            gathered = await asyncio.gather(*tasks, return_exceptions=True)
+            for profile, res in zip(active, gathered):
+                key = ROUTER_KEY[profile]
+                if isinstance(res, Exception):
+                    msg = str(res)[:200]
+                    router_status[key] = f"error:{msg}"
+                    logger.warning("Secondary router %s failed: %s", key, msg)
+                    continue
+                router_status[key] = "ok"
+                routers_used.append(key)
+                _project_secondary(
+                    primary=primary,
+                    primary_S=primary_S,
+                    key=key,
+                    res=res,
+                    legal_by_router=legal_by_router,
+                    traffic_by_router=traffic_by_router,
+                    elevations_by_source=elevations_by_source,
+                    warnings=warnings,
+                )
 
     return MultiRouteResult(
         primary_profile=primary_profile,

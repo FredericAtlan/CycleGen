@@ -94,6 +94,42 @@ export const DRIVER_PRESETS: DriverPresetMeta[] = [
       speed_factor: 1.1,
     },
   },
+  {
+    id: "Prudent",
+    presetId: "prudent",
+    label: "Prudent (AVL Route Studio)",
+    blurb:
+      "Fingerprint AVL Route Studio « conducteur prudent » — a+/jerk doux, sf P90≈1,02, a_y≈3,3.",
+    a_y: 3.27,
+    physics: {
+      a_max: 1.29,
+      b_comf: 1.71,
+      jerk_max: 1.5,
+      jerk_brake_max: 1.5,
+      T: 1.8,
+      T_h: 4.5,
+      s0: 2.8,
+      speed_factor: 1.02,
+    },
+  },
+  {
+    id: "Dynamique",
+    presetId: "dynamique",
+    label: "Dynamique (AVL Route Studio)",
+    blurb:
+      "Fingerprint AVL Route Studio « conducteur dynamique » — a−/jerk élevés, sf P90≈1,05, a_y≈4,9.",
+    a_y: 4.9,
+    physics: {
+      a_max: 2.08,
+      b_comf: 3.47,
+      jerk_max: 3.0,
+      jerk_brake_max: 3.0,
+      T: 1.2,
+      T_h: 3.0,
+      s0: 1.8,
+      speed_factor: 1.05,
+    },
+  },
 ];
 
 /** Standard AVL = BCB rétro-ingénierie (conservé). */
@@ -120,7 +156,7 @@ export const AVL_PRESET: DriverPresetMeta = {
   physics: { ...BCB_DRIVER_PHYSICS },
 };
 
-/** All selectable UI presets (Eco · Normal · Sport · Standard AVL). */
+/** All selectable UI presets (Eco · Normal · Sport · Prudent · Dynamique · Standard AVL). */
 export const UI_DRIVER_PRESETS: DriverPresetMeta[] = [
   ...DRIVER_PRESETS,
   AVL_PRESET,

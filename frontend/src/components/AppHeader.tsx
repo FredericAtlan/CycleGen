@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import CycleGenLogo from "@/components/CycleGenLogo";
 import { useHelpOptional } from "@/components/HelpContext";
 import WarningsBell from "@/components/WarningsBell";
+import { useApiConsoleOptional } from "@/components/ApiConsoleContext";
 import {
   useHeaderChromeOptional,
   type StudioHeaderChrome,
@@ -133,6 +134,7 @@ function VersusControls({ chrome }: { chrome: VersusHeaderChrome }) {
 export default function AppHeader() {
   const pathname = usePathname();
   const help = useHelpOptional();
+  const apiConsole = useApiConsoleOptional();
   const headerChrome = useHeaderChromeOptional();
   const chrome = headerChrome?.chrome ?? null;
   const [mounted, setMounted] = useState(false);
@@ -180,14 +182,20 @@ export default function AppHeader() {
   const showMenu = chrome?.kind === "studio";
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-2 sm:gap-3 sm:px-3">
+    <header
+      data-testid="app-header"
+      className="flex h-12 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-2 sm:gap-3 sm:px-3"
+    >
       <div className="flex shrink-0 items-center gap-2">
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand text-white sm:h-8 sm:w-8">
           <CycleGenLogo className="h-5 w-5 sm:h-6 sm:w-6" />
         </div>
         <div className="hidden min-w-0 leading-tight sm:block">
           <div className="flex flex-wrap items-baseline gap-x-1.5">
-            <span className="text-sm font-bold tracking-wide text-slate-900">
+            <span
+              data-testid="app-brand"
+              className="text-sm font-bold tracking-wide text-slate-900"
+            >
               {APP_NAME}
             </span>
             <span className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[9px] font-semibold tabular-nums text-slate-600">
@@ -240,10 +248,33 @@ export default function AppHeader() {
       <div
         className={`flex shrink-0 items-center gap-1 ${chrome ? "" : "ml-auto"}`}
       >
+        {apiConsole && (
+          <button
+            type="button"
+            onClick={apiConsole.toggle}
+            className={`inline-flex h-8 items-center gap-1 rounded-md border px-2 font-mono text-[10px] font-semibold uppercase tracking-wide transition ${
+              apiConsole.open
+                ? "border-slate-800 bg-slate-900 text-emerald-300"
+                : "border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+            }`}
+            title="Console API — connexion & récupération"
+            aria-label="Console API"
+            aria-pressed={apiConsole.open}
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                apiConsole.open ? "bg-emerald-400" : "bg-slate-400"
+              }`}
+              aria-hidden
+            />
+            API
+          </button>
+        )}
         <WarningsBell />
         {help && (
           <button
             type="button"
+            data-testid="help-button"
             onClick={() =>
               help.open
                 ? help.closeHelp()

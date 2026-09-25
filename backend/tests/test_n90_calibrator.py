@@ -52,6 +52,39 @@ class TestN90Calibrator(unittest.TestCase):
         ids = {a.id for a in arms}
         self.assertEqual(len(ids), len(arms))
 
+    def test_build_grid_rejects_huge_product(self) -> None:
+        """Product pre-check must fire before itertools.product materialises."""
+        big = list(range(10))  # 10^5 = 100_000 > 50_000 hard cap
+        with self.assertRaises(ValueError) as ctx:
+            build_grid(
+                a_max_grid=big,
+                b_comf_grid=big,
+                T_grid=big,
+                T_h_grid=big,
+                s0_grid=big,
+                jerk_max_grid=[1.0],
+                jerk_brake_max_grid=[1.0],
+                speed_factor_grid=[1.0],
+                max_arms=96,
+            )
+        self.assertIn("too large", str(ctx.exception).lower())
+
+    def test_build_grid_caps_axis_length(self) -> None:
+        oversized = list(range(40))
+        arms = build_grid(
+            a_max_grid=oversized,
+            b_comf_grid=[2.0],
+            T_grid=[1.5],
+            T_h_grid=[4.0],
+            s0_grid=[2.0],
+            jerk_max_grid=[1.5],
+            jerk_brake_max_grid=[3.0],
+            speed_factor_grid=[1.0],
+            max_arms=64,
+        )
+        # Axis capped at 32 → product 32, under max_arms*20.
+        self.assertEqual(len(arms), 32)
+
     def test_build_grid_default_keys_are_valid(self) -> None:
         expected = {
             "a_max",

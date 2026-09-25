@@ -29,14 +29,110 @@ ARTERIAL_HIGHWAYS = frozenset({"primary", "trunk"})
 ARTERIAL_MIN_SPACING_M = 500.0
 
 # P1 — Grade coupling. Injected as a_grade = −g·sin(α(s)) into IDM output.
-# Kinematic driver only (no aero/roll modelled); AVL CRUISE plant is out of scope.
+# Kinematic driver + optional VehiclePlant (power / brake / road-load / retenue).
 G_EARTH = 9.80665
 # P2 — MPC-lite preview braking horizon (s). Used on top of T_h scan.
 PREVIEW_T_LOOK_S = 5.0
 PREVIEW_STEP_M = 5.0
+# Floor speed for P/v traction & regen force (avoid singularity at standstill).
+VEHICLE_V_EPS_MPS = 0.8
 
 DEFAULT_TLS_CYCLE_S = 90.0
 DEFAULT_TLS_GREEN_S = 35.0
+
+
+@dataclass(frozen=True)
+class VehiclePlant:
+    """Optional longitudinal plant limits for IDM accel clipping (option B).
+
+    Force balance at wheels:
+      F_need = m·a_cmd + F_road(v) + m·g·sin(α)
+      F_trac ∈ [-τ_brake/r_dyn, P_max/v]
+      a_out  = (F_trac − F_road − m·g·sin(α)) / m
+
+    On descent, a mild engine/regen hold subtracts a fraction of the grade
+    force when the driver is near coast (retenue).
+    """
+
+    mass_kg: float = 1500.0
+    f0_n: float = 100.0
+    f1_n_per_kph: float = 0.5
+    f2_n_per_kph2: float = 0.03
+    r_dyn_m: float = 0.32
+    power_kw: float | None = None
+    tau_brake_max_nm: float | None = None
+    # Fraction of P_max available as regen / engine-brake on descent.
+    regen_frac: float = 0.35
+    # Fraction of descending grade force cancelled when coasting.
+    engine_brake_frac: float = 0.40
+
+
+def vehicle_plant_from_mapping(
+    raw: dict[str, Any] | VehiclePlant | None,
+) -> VehiclePlant | None:
+    """Build a ``VehiclePlant`` from a dict (API / batch) or pass-through."""
+    if raw is None:
+        return None
+    if isinstance(raw, VehiclePlant):
+        return raw
+    mass = float(raw.get("mass_kg") or 0.0)
+    if mass <= 1.0:
+        return None
+    power = raw.get("power_kw")
+    tau = raw.get("tau_brake_max_nm")
+    return VehiclePlant(
+        mass_kg=mass,
+        f0_n=float(raw.get("f0_n") or 100.0),
+        f1_n_per_kph=float(raw.get("f1_n_per_kph") or 0.0),
+        f2_n_per_kph2=float(raw.get("f2_n_per_kph2") or 0.03),
+        r_dyn_m=float(raw.get("r_dyn_m") or 0.32),
+        power_kw=float(power) if power is not None and float(power) > 0 else None,
+        tau_brake_max_nm=(
+            float(tau) if tau is not None and float(tau) > 0 else None
+        ),
+        regen_frac=float(raw.get("regen_frac") or 0.35),
+        engine_brake_frac=float(raw.get("engine_brake_frac") or 0.40),
+    )
+
+
+def _road_load_n(v_mps: float, plant: VehiclePlant) -> float:
+    vk = max(0.0, v_mps) * 3.6
+    return plant.f0_n + plant.f1_n_per_kph * vk + plant.f2_n_per_kph2 * vk * vk
+
+
+def clip_vehicle_accel(
+    a_cmd: float,
+    v_mps: float,
+    alpha_rad: float,
+    plant: VehiclePlant | None,
+) -> float:
+    """Clip commanded longitudinal accel by power, brake torque & retenue."""
+    if plant is None:
+        return a_cmd
+    m = max(1.0, plant.mass_kg)
+    v_safe = max(float(v_mps), VEHICLE_V_EPS_MPS)
+    f_road = _road_load_n(v_mps, plant)
+    f_grade = m * G_EARTH * math.sin(alpha_rad)
+    f_need = m * a_cmd + f_road + f_grade
+
+    # Descent retenue: when near-coast, absorb part of grade assist via regen.
+    if alpha_rad < -0.005 and a_cmd < 0.35:
+        p_cap = plant.power_kw if plant.power_kw is not None else 50.0
+        f_regen = (p_cap * 1000.0 * plant.regen_frac) / v_safe
+        f_grade_down = max(0.0, -f_grade)
+        f_hold = min(f_grade_down * plant.engine_brake_frac, f_regen)
+        f_need -= f_hold
+
+    f_trac_max = float("inf")
+    if plant.power_kw is not None and plant.power_kw > 0:
+        f_trac_max = (plant.power_kw * 1000.0) / v_safe
+
+    f_brake_max = float("inf")
+    if plant.tau_brake_max_nm is not None and plant.r_dyn_m > 0.05:
+        f_brake_max = abs(plant.tau_brake_max_nm) / plant.r_dyn_m
+
+    f_applied = max(-f_brake_max, min(f_trac_max, f_need))
+    return (f_applied - f_road - f_grade) / m
 
 
 @dataclass(frozen=True)
@@ -96,6 +192,29 @@ PROFILE_PARAMS: dict[DriverProfile, IDMParams] = {
         jerk_max=3.0,
         jerk_brake_max=5.0,
     ),
+    # AVL XSPACE P95 fingerprints (Iseran / Veleta / Stelvio).
+    DriverProfile.PRUDENT: IDMParams(
+        a_max=1.29,
+        b_comf=1.71,
+        # P90 AVL Route Studio (mean ~0.73 was too slow → ΔT +25..35 %).
+        speed_factor=1.02,
+        T=1.8,
+        s0=2.8,
+        T_h=4.5,
+        jerk_max=1.5,
+        jerk_brake_max=1.5,
+    ),
+    DriverProfile.DYNAMIQUE: IDMParams(
+        a_max=2.08,
+        b_comf=3.47,
+        # P90 AVL Route Studio (mean ~0.86 was too slow → ΔT +15..17 %).
+        speed_factor=1.05,
+        T=1.2,
+        s0=1.8,
+        T_h=3.0,
+        jerk_max=3.0,
+        jerk_brake_max=3.0,
+    ),
 }
 
 
@@ -119,6 +238,9 @@ def resolve_profile(
                 "aggressive": DriverProfile.AGRESSIF,
                 "sportif": DriverProfile.SPORTIF,
                 "sport": DriverProfile.SPORTIF,
+                "prudent": DriverProfile.PRUDENT,
+                "dynamique": DriverProfile.DYNAMIQUE,
+                "dynamic": DriverProfile.DYNAMIQUE,
             }
             profile = mapping.get(lowered, DriverProfile.NORMAL)
     base = PROFILE_PARAMS[profile]
@@ -607,6 +729,7 @@ class IDMSolver:
         tls_green_s: float = DEFAULT_TLS_GREEN_S,
         tls_override: str = "auto",
         enable_markov: bool = False,
+        vehicle: dict[str, Any] | VehiclePlant | None = None,
     ) -> None:
         self.corridor = corridor
         self.profile, self.params = resolve_profile(
@@ -622,6 +745,7 @@ class IDMSolver:
         self.tls_green_s = float(tls_green_s)
         self.tls_override = (tls_override or "auto").strip().lower()
         self.enable_markov = bool(enable_markov)
+        self.vehicle = vehicle_plant_from_mapping(vehicle)
         self._rng = random.Random(seed)
         self._markov = MarkovNoiseGenerator(self.profile)
         self.last_safety: dict[str, Any] = {}
@@ -793,10 +917,9 @@ class IDMSolver:
             # crawl above ~6 % grade because a_idm ≤ +0.6 but −g·sin(7.4°)
             # ≈ −0.72 → a_dyn ≡ −0.12. See tests/test_climb_holds_speed.py.
             # The comfort ceiling on the *apparent* accel below (a_max)
-            # still bounds what the passenger feels; the wheel torque
-            # implicitly needed to deliver it is assumed available (option A
-            # — no explicit vehicle-power cap; option B would add
-            # a_wheel ≤ P_nom / (m·v) using vehicle params).
+            # still bounds what the passenger feels. Option B: when a
+            # VehiclePlant is set, wheel force is clipped by P_max / τ_brake
+            # (+ mild retenue on descent) before the comfort clamp.
             alpha_s = _interp(s, S, alpha) if alpha else 0.0
             a_grade = -G_EARTH * math.sin(alpha_s)
             grade_ff = max(0.0, -a_grade)  # >0 in climbs, 0 otherwise
@@ -824,6 +947,9 @@ class IDMSolver:
                 # with 0.0 (that bug killed all free-road acceleration).
                 if math.isfinite(a_preview) and a_preview < a_dyn:
                     a_dyn = a_preview
+
+            if self.vehicle is not None:
+                a_dyn = clip_vehicle_accel(a_dyn, v, alpha_s, self.vehicle)
 
             d_brake = _braking_distance_m(v, params.b_comf)
             is_critical = (delta_s < d_brake) or (a_dyn <= -1.0)
@@ -901,6 +1027,8 @@ class IDMSolver:
                 # P1 — grade also on coast tail
                 alpha_s = _interp(s, S, alpha) if alpha else 0.0
                 a_final = a_idm - G_EARTH * math.sin(alpha_s)
+                if self.vehicle is not None:
+                    a_final = clip_vehicle_accel(a_final, v, alpha_s, self.vehicle)
                 a_final = max(-params.b_comf, min(params.a_max, a_final))
                 a_final = _apply_jerk_limit(
                     a_final,

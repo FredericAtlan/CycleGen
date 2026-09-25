@@ -299,7 +299,10 @@ export default function Sidebar({
   const routeLabel = `${departureLabel} → ${destinationLabel}`;
 
   return (
-    <aside className="flex h-full w-80 shrink-0 flex-col border-r border-slate-200 bg-white">
+    <aside
+      data-testid="studio-sidebar"
+      className="flex h-full w-80 shrink-0 flex-col border-r border-slate-200 bg-white"
+    >
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
         {activeStep === 1 && (
           <div className="flex flex-col gap-3">
@@ -507,7 +510,7 @@ export default function Sidebar({
                       Routeurs (multi)
                     </span>
                     <span className="text-[10px] text-slate-400">
-                      1er = géométrie primaire
+                      HERE + secours
                     </span>
                   </div>
                   <ul className="flex flex-col gap-1 rounded-md border border-slate-200 bg-slate-50/80 p-2">
@@ -574,9 +577,9 @@ export default function Sidebar({
                     )}
                   </ul>
                   <p className="text-[10px] leading-snug text-slate-500">
-                    Le 1er coché fournit la géométrie ; les suivants sont
-                    projetés (nearest-S) et alimentent les sources cochables
-                    de l’étape Contraintes.
+                    Par défaut : HERE uniquement. Si HERE échoue → Mapbox →
+                    OSRM. Cocher plusieurs routeurs active le multi-compare
+                    (projection nearest-S) dans Contraintes.
                   </p>
                 </div>
 

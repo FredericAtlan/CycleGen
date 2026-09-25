@@ -28,6 +28,8 @@ import { useHeaderChrome } from "@/components/HeaderChromeContext";
 import ResultsAnalysisPanel from "@/components/export/ResultsAnalysisPanel";
 import type { LivePoint } from "@/components/simulation/LiveCharts";
 import LiveAnalysisPanel from "@/components/simulation/LiveAnalysisPanel";
+import PlaybackBar from "@/components/simulation/PlaybackBar";
+import { useCyclePlayback } from "@/hooks/useCyclePlayback";
 import { interpolateAlongS } from "@/components/simulation/geo";
 import {
   useSimulationSocket,
@@ -387,6 +389,8 @@ export default function CycleGenShell() {
     () => boot?.syncChartMap ?? true
   );
   const [chartCursorS, setChartCursorS] = useState<number | null>(null);
+  const playback = useCyclePlayback(profile, simulationId);
+  const playbackAutoKeyRef = useRef<string>("");
   const [brushRange, setBrushRange] = useState<{
     s0: number;
     s1: number;
@@ -744,7 +748,9 @@ export default function CycleGenShell() {
           dp === "Eco" ||
           dp === "Normal" ||
           dp === "Agressif" ||
-          dp === "Sportif"
+          dp === "Sportif" ||
+          dp === "Prudent" ||
+          dp === "Dynamique"
         ) {
           setDriverProfile(dp);
           if (!meta.physics) setPhysics(presetFor(dp).physics);
@@ -1212,6 +1218,24 @@ export default function CycleGenShell() {
     if (!syncChartMap || chartCursorS == null) return null;
     return interpolateAlongS(corridor, chartCursorS, geometry);
   }, [syncChartMap, chartCursorS, corridor, geometry]);
+
+  const replayEgo = useMemo(() => {
+    if (stage !== "completed" || !playback.ready) return null;
+    return interpolateAlongS(corridor, playback.s, geometry);
+  }, [stage, playback.ready, playback.s, corridor, geometry]);
+
+  /** Chart↔map cursor: ignore clears while replaying; scrub seeks the playhead. */
+  const handleCursorS = useCallback(
+    (s_m: number | null) => {
+      if (playback.playing) {
+        if (s_m == null) return;
+        playback.pause();
+        playback.seekS(s_m);
+      }
+      setChartCursorS(s_m);
+    },
+    [playback]
+  );
 
   const lastLoupeSRef = useRef(0);
 
@@ -2331,7 +2355,7 @@ export default function CycleGenShell() {
       }
     } catch (err) {
       setSimError(errMessage(err, "Impossible de consolider le profil."));
-      setWsEnabled(true);
+      // Keep WS disabled on stop failure — re-enabling would resume a dead stream.
       setGeneratingCycle(false);
     } finally {
       setSimStopping(false);
@@ -2440,7 +2464,7 @@ export default function CycleGenShell() {
         return;
       }
 
-      setWsUrl(simulationWsUrl(res.ws_path));
+      setWsUrl(simulationWsUrl(res.ws_path, res.ws_token));
       setWsEnabled(true);
     } catch (err) {
       setSimError(errMessage(err, "Impossible de générer le cycle."));
@@ -2515,6 +2539,10 @@ export default function CycleGenShell() {
     []
   );
 
+  const handleWsReconnect = useCallback(() => {
+    setSeries([]);
+  }, []);
+
   useSimulationSocket({
     url: wsUrl,
     enabled: wsEnabled && stage === "simulating",
@@ -2523,6 +2551,7 @@ export default function CycleGenShell() {
     onEnd: () => {
       void consolidateSimulation();
     },
+    onReconnect: handleWsReconnect,
   });
 
   const handleStopSimulation = useCallback(() => {
@@ -2535,6 +2564,7 @@ export default function CycleGenShell() {
   }, [corridor, distanceM]);
 
   const liveFollow = stage === "simulating" && !!egoPosition;
+  const replayFollow = stage === "completed" && playback.playing && !!replayEgo;
   const isLiveRun = stage === "simulating" || simStarting;
   /** Completed profile without map geometry (regulatory / OEM speed traces). */
   const profileOnlyMode =
@@ -2544,12 +2574,50 @@ export default function CycleGenShell() {
       geometry.length < 2 &&
       (stage === "completed" || activeStep === 4));
 
+  // Drive shared chart cursor from the playhead while replaying.
+  useEffect(() => {
+    if (playback.playing) setChartCursorS(playback.s);
+  }, [playback.playing, playback.s]);
+
+  // Opt-in auto-replay (×10): localStorage `cyclegen.autoReplay` = "1", default off.
+  useEffect(() => {
+    if (stage !== "completed" || !playback.ready || !profile) return;
+    const optedIn =
+      typeof window !== "undefined" &&
+      window.localStorage.getItem("cyclegen.autoReplay") === "1";
+    if (!optedIn) return;
+    const key = [
+      simulationId ?? "",
+      profile.time.length,
+      profile.total_duration_s,
+      profile.position[profile.position.length - 1],
+    ].join(":");
+    if (playbackAutoKeyRef.current === key) return;
+    playbackAutoKeyRef.current = key;
+    playback.setSpeed(10);
+    const id = requestAnimationFrame(() => playback.play());
+    return () => cancelAnimationFrame(id);
+  }, [
+    stage,
+    playback.ready,
+    playback.play,
+    playback.setSpeed,
+    profile,
+    simulationId,
+  ]);
+
   if (liveFollow) {
     lastLoupeSRef.current = simS;
+  } else if (replayFollow) {
+    lastLoupeSRef.current = playback.s;
   } else if (chartCursorS != null && Number.isFinite(chartCursorS)) {
     lastLoupeSRef.current = chartCursorS;
   }
-  const loupeS = liveFollow ? simS : chartCursorS ?? lastLoupeSRef.current;
+  const loupeS = liveFollow
+    ? simS
+    : replayFollow
+      ? playback.s
+      : chartCursorS ?? lastLoupeSRef.current;
   const showRoadLoupe =
     !!corridor &&
     !!corridor.elevations_m?.length &&
@@ -3015,7 +3083,7 @@ export default function CycleGenShell() {
         onMaxSpeedKmhChange={handleMaxSpeedKmhChange}
         envelopeMask={envelopeMask}
         onEnvelopeMaskChange={handleEnvelopeMaskChange}
-        onCursorS={setChartCursorS}
+        onCursorS={handleCursorS}
         onBrushRangeS={setBrushRange}
         enableMarkov={enableMarkov}
         onEnableMarkovChange={setEnableMarkov}
@@ -3094,20 +3162,28 @@ export default function CycleGenShell() {
           onMapClick={profileOnlyMode ? () => undefined : handleMapClick}
           layoutKey={`${activeStep}-${mapRightLayout ? "right" : "idle"}-${showRoadLoupe ? "loupe" : "noloupe"}`}
           egoPosition={
-            stage === "simulating" || stage === "completed"
+            stage === "simulating"
               ? egoPosition
-              : null
+              : stage === "completed"
+                ? replayEgo
+                : null
           }
           otherVehicles={stage === "simulating" ? otherVehicles : []}
-          syncCursor={liveFollow ? egoPosition : syncCursor}
-          syncPan={liveFollow ? true : syncChartMap}
+          syncCursor={
+            liveFollow
+              ? egoPosition
+              : replayFollow
+                ? replayEgo
+                : syncCursor
+          }
+          syncPan={liveFollow || replayFollow ? true : syncChartMap}
           rangeGeometry={rangeGeometry}
           referenceGeometry={referenceGeometry}
           mapFocus={mapFocus}
           showArrows={showRouteArrows}
           speedLayers={mapSpeedLayers}
           onRouteCursorS={
-            corridor && !profileOnlyMode ? setChartCursorS : undefined
+            corridor && !profileOnlyMode ? handleCursorS : undefined
           }
         />
         {!profileOnlyMode && (buildingCorridor || analyzing) ? (
@@ -3118,6 +3194,9 @@ export default function CycleGenShell() {
           />
         ) : null}
         </div>
+        {playback.ready && stage === "completed" && (
+          <PlaybackBar playback={playback} />
+        )}
         {showRoadLoupe && corridor && (
           <div className="shrink-0 border-t border-slate-200 bg-white p-1.5">
             <RoadLoupe3D corridor={corridor} s_m={loupeS} />
@@ -3154,7 +3233,7 @@ export default function CycleGenShell() {
           }
           hasReference={referenceGeometry.length >= 2}
           hasRange={rangeGeometry.length >= 2}
-          syncEnabled={liveFollow ? true : syncChartMap}
+          syncEnabled={liveFollow || replayFollow ? true : syncChartMap}
           onSyncChange={setSyncChartMap}
           onFocus={(kind) => bumpFocus({ kind })}
           onFocusRange={() => {
@@ -3298,9 +3377,13 @@ export default function CycleGenShell() {
                 setTrapLengthMLocal(v);
                 setSlopeAlgo((prev) => ({ ...prev, trapLengthM: v }));
               }}
-              onCursorS={setChartCursorS}
+              onCursorS={handleCursorS}
               onBrushRangeS={handleBrushRangeS}
-              highlightS={chartCursorS ?? null}
+              highlightS={
+                playback.playing
+                  ? playback.s
+                  : chartCursorS ?? (playback.ready ? playback.s : null)
+              }
               onRequestRebuild={requestConstraintRebuild}
             />
           </aside>
@@ -3339,8 +3422,10 @@ export default function CycleGenShell() {
               slopeUnit={slopeUnit}
               onSlopeUnitChange={setSlopeUnit}
               syncEnabled={syncChartMap}
-              onCursorS={setChartCursorS}
+              onCursorS={handleCursorS}
               onBrushRangeS={handleBrushRangeS}
+              highlightT={playback.ready ? playback.t : null}
+              followPlayhead={playback.playing}
               trafficSource={trafficSource}
               warnings={warnings}
               driverProfile={driverProfile}

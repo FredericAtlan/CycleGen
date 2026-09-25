@@ -223,7 +223,14 @@ export default function VariantComparePanel({
         let arms: ScenarioArmRequest[] = [];
         if (mode === "drivers") {
           arms = (
-            ["Eco", "Normal", "Agressif", "Sportif"] as DriverProfile[]
+            [
+              "Eco",
+              "Normal",
+              "Agressif",
+              "Sportif",
+              "Prudent",
+              "Dynamique",
+            ] as DriverProfile[]
           ).map((p) => ({
               id: p,
               label: p,

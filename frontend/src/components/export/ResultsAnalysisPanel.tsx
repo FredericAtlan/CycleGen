@@ -41,6 +41,10 @@ export type ResultsAnalysisPanelProps = {
   syncEnabled?: boolean;
   onCursorS?: (s_m: number | null) => void;
   onBrushRangeS?: (range: { s0: number; s1: number } | null) => void;
+  /** Playback playhead time (s). */
+  highlightT?: number | null;
+  /** Pan analyse charts to follow the playhead while replaying. */
+  followPlayhead?: boolean;
   trafficSource?: string | null;
   warnings?: CycleGenWarning[];
   driverProfile: DriverProfile;
@@ -106,6 +110,8 @@ export default function ResultsAnalysisPanel({
   syncEnabled = false,
   onCursorS,
   onBrushRangeS,
+  highlightT = null,
+  followPlayhead = false,
   trafficSource = null,
   warnings = [],
   driverProfile,
@@ -459,6 +465,8 @@ export default function ResultsAnalysisPanel({
         syncEnabled={noGps ? false : syncEnabled}
         onCursorS={noGps ? undefined : onCursorS}
         onBrushRangeS={noGps ? undefined : onBrushRangeS}
+        highlightT={highlightT}
+        followPlayhead={followPlayhead}
         warnings={displayWarnings}
         noGps={noGps}
         hasVehicle={vehicle != null}

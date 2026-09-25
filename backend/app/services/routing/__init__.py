@@ -8,6 +8,7 @@ from app.services.routing.multi import (
     ROUTER_KEY,
     MultiRouteResult,
     analyze_multi_router,
+    primary_attempt_order,
     resolve_router_selection,
     router_available,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "MultiRouteResult",
     "analyze_multi_router",
     "resolve_router_selection",
+    "primary_attempt_order",
     "router_available",
     "ROUTER_KEY",
     "DEFAULT_PRIORITY",

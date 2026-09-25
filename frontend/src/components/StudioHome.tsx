@@ -84,10 +84,18 @@ export default function StudioHome() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 items-start justify-center overflow-y-auto bg-slate-50 p-6">
+    <div
+      data-testid="studio-home"
+      className="flex min-h-0 flex-1 items-start justify-center overflow-y-auto bg-slate-50 p-6"
+    >
       <div className="w-full max-w-3xl space-y-6 py-8">
         <div>
-          <h1 className="text-lg font-bold text-slate-900">CycleGen Studio</h1>
+          <h1
+            data-testid="studio-home-title"
+            className="text-lg font-bold text-slate-900"
+          >
+            CycleGen Studio
+          </h1>
           <p className="mt-1 text-sm text-slate-500">
             Deux flux : créer un cycle depuis un trajet GPS, ou étudier un
             roulage existant (temps, vitesse, pente) avec la réponse véhicule.

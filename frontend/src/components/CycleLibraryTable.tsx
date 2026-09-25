@@ -7,6 +7,7 @@ import { CORPUS_FAMILY_LABEL } from "@/lib/corpusGroups";
 import {
   deleteSavedCycle,
   elevationExtremesM,
+  ensureXspaceAvlSeedCycles,
   listSavedCycles,
   newCycleInstanceId,
   packCycle,
@@ -179,20 +180,28 @@ export default function CycleLibraryTable() {
 
   useEffect(() => {
     setCorpusLoading(true);
-    void listBenchmarkSources()
-      .then((sources) => {
+    void (async () => {
+      try {
+        await ensureXspaceAvlSeedCycles();
+        setTick((t) => t + 1);
+      } catch {
+        /* optional seed */
+      }
+      try {
+        const sources = await listBenchmarkSources();
         setCorpus(Array.isArray(sources) ? sources : []);
         setError("");
-      })
-      .catch((e) => {
+      } catch (e) {
         setCorpus([]);
         setError(
           e instanceof Error
             ? e.message
             : "Impossible de charger le corpus (API)."
         );
-      })
-      .finally(() => setCorpusLoading(false));
+      } finally {
+        setCorpusLoading(false);
+      }
+    })();
   }, []);
 
   const rows = useMemo(() => {

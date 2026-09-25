@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import shutil
+import time
 from typing import Any
 from urllib.parse import urlencode
 
@@ -191,6 +192,18 @@ class SpatialDataAcquisition:
         soft_fail: bool = False,
         timeout: httpx.Timeout | None = None,
     ) -> Any:
+        from app.services.connection_log import normalize_provider, record
+
+        provider = normalize_provider(service)
+        t0 = time.perf_counter()
+        record(
+            provider=provider,
+            phase="start",
+            method=method,
+            url=url,
+            params=params,
+            detail=f"Connexion {provider}",
+        )
         req_timeout = timeout or (SOFT_HTTP_TIMEOUT if soft_fail else HTTP_TIMEOUT)
         try:
             resp = await self.client.request(
@@ -208,8 +221,46 @@ class SpatialDataAcquisition:
                     request=resp.request,
                 )
             resp.raise_for_status()
-            return resp.json()
+            data_out = resp.json()
+            elapsed = int((time.perf_counter() - t0) * 1000)
+            size_hint = None
+            try:
+                raw = resp.content
+                if raw is not None:
+                    n = len(raw)
+                    size_hint = (
+                        f"{n} o"
+                        if n < 1024
+                        else f"{n / 1024:.1f} Ko"
+                        if n < 1024 * 1024
+                        else f"{n / (1024 * 1024):.2f} Mo"
+                    )
+            except Exception:  # noqa: BLE001
+                size_hint = None
+            record(
+                provider=provider,
+                phase="ok",
+                method=method,
+                url=url,
+                params=params,
+                status=resp.status_code,
+                duration_ms=elapsed,
+                bytes_hint=size_hint,
+                detail=f"Réponse {provider}",
+            )
+            return data_out
         except httpx.HTTPStatusError as exc:
+            elapsed = int((time.perf_counter() - t0) * 1000)
+            record(
+                provider=provider,
+                phase="error",
+                method=method,
+                url=url,
+                params=params,
+                status=exc.response.status_code,
+                duration_ms=elapsed,
+                detail=f"HTTP {exc.response.status_code}",
+            )
             if soft_fail:
                 logger.warning("%s soft-fail HTTP %s", service, exc.response.status_code)
                 return {}
@@ -220,6 +271,16 @@ class SpatialDataAcquisition:
         except (httpx.RequestError, ValueError) as exc:
             # Soft optional services: never chain into curl (can hang minutes).
             if soft_fail:
+                elapsed = int((time.perf_counter() - t0) * 1000)
+                record(
+                    provider=provider,
+                    phase="error",
+                    method=method,
+                    url=url,
+                    params=params,
+                    duration_ms=elapsed,
+                    detail=f"soft-fail {type(exc).__name__}",
+                )
                 logger.warning(
                     "%s soft-fail (%s) — skipping curl fallback",
                     service,
@@ -227,11 +288,43 @@ class SpatialDataAcquisition:
                 )
                 return {}
             logger.warning("%s httpx failed (%s); trying curl fallback", service, type(exc).__name__)
+            record(
+                provider=provider,
+                phase="info",
+                method=method,
+                url=url,
+                params=params,
+                detail="httpx échec → fallback curl",
+            )
             try:
-                return await _curl_json(
+                data_out = await _curl_json(
                     method, url, params=params, data=data, json_body=json_body
                 )
+                elapsed = int((time.perf_counter() - t0) * 1000)
+                record(
+                    provider=provider,
+                    phase="ok",
+                    method=method,
+                    url=url,
+                    params=params,
+                    status="curl",
+                    duration_ms=elapsed,
+                    detail=f"Réponse {provider} (curl)",
+                )
+                return data_out
             except Exception as curl_exc:  # noqa: BLE001
+                elapsed = int((time.perf_counter() - t0) * 1000)
+                record(
+                    provider=provider,
+                    phase="error",
+                    method=method,
+                    url=url,
+                    params=params,
+                    duration_ms=elapsed,
+                    detail=(
+                        f"{redact_secrets(exc)} (curl: {redact_secrets(curl_exc)})"
+                    ),
+                )
                 raise HTTPException(
                     status_code=502,
                     detail=(
@@ -261,6 +354,14 @@ class SpatialDataAcquisition:
         owns = self._client is None
         if owns:
             self._client = httpx.AsyncClient(timeout=HTTP_TIMEOUT)
+        from app.services.connection_log import (
+            begin_connection_log,
+            clear_connection_log,
+            get_connection_log,
+            record,
+        )
+
+        begin_connection_log()
         try:
             if depart_at is None:
                 depart_at = datetime.now(timezone.utc)
@@ -294,6 +395,21 @@ class SpatialDataAcquisition:
                 return out
 
             profiles = _normalize_profiles(routing_profiles, routing_profile)
+            if profiles:
+                record(
+                    provider="CycleGen",
+                    phase="info",
+                    detail=(
+                        "Routeurs demandés : "
+                        + " → ".join(p.value for p in profiles)
+                    ),
+                )
+            else:
+                record(
+                    provider="CycleGen",
+                    phase="info",
+                    detail="Aucun routeur UI — chaîne défaut HERE → Mapbox → OSRM",
+                )
 
             multi = await analyze_multi_router(
                 start=(lat_a, lon_a),
@@ -410,8 +526,10 @@ class SpatialDataAcquisition:
                 },
                 elevations_by_source=elevations_by_source,
                 router_status=dict(multi.router_status),
+                connection_log=[e.to_dict() for e in get_connection_log()],
             )
         finally:
+            clear_connection_log()
             if owns and self._client is not None:
                 await self._client.aclose()
                 self._client = None
