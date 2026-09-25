@@ -19,9 +19,18 @@ test.describe("studio shell", () => {
     await expect(sidebar).toBeVisible({ timeout: 30_000 });
     await expect(sidebar.getByText("Trajet")).toBeVisible();
 
-    await expect(page.getByRole("navigation", { name: "Principal" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Créer" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Versus" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Bibliothèque" })).toBeVisible();
+    const nav = page.getByRole("navigation", { name: "Principal" });
+    await expect(nav).toBeVisible();
+    await expect(nav.getByRole("link", { name: /Créer/i })).toBeVisible();
+    await expect(nav.getByRole("link", { name: /Versus/i })).toBeVisible();
+    await expect(
+      nav.getByRole("link", { name: /Bibliothèque/i })
+    ).toBeVisible();
+
+    const stepper = page.getByTestId("studio-stepper");
+    await expect(stepper).toBeVisible();
+    await expect(stepper.getByRole("button", { name: /Trajet/i })).toBeVisible();
+    await expect(stepper.getByText("Conducteur")).toBeVisible();
+    await expect(stepper.getByText("Cycle")).toBeVisible();
   });
 });
