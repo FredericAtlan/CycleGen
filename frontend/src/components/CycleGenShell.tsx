@@ -1571,6 +1571,13 @@ export default function CycleGenShell() {
   const handleEnvelopeMaskChange = useCallback(
     (mask: EnvelopeMask) => {
       setEnvelopeMask(mask);
+      // Mirror composition toggles onto map L/T/R layers (atelier = source of truth).
+      setMapSpeedLayers((prev) => ({
+        ...prev,
+        legal: mask.legal,
+        traffic: mask.traffic,
+        curve: mask.curve,
+      }));
       setCorridor((prev) =>
         prev
           ? applyEnvelopeMask(prev, mask, {

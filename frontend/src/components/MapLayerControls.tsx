@@ -45,11 +45,12 @@ function IconChip({
       type="button"
       title={title}
       aria-label={title}
+      aria-pressed={active}
       disabled={disabled}
       onClick={onClick}
       className={`inline-flex h-7 min-w-[28px] items-center justify-center gap-0.5 rounded px-1.5 text-[10px] font-bold transition disabled:cursor-not-allowed disabled:opacity-35 ${
         active
-          ? "text-white shadow-sm"
+          ? "text-white shadow-sm ring-2 ring-offset-1 ring-slate-400"
           : "bg-slate-50 text-slate-600 ring-1 ring-slate-200 hover:bg-white"
       }`}
       style={active ? { backgroundColor: color } : undefined}
@@ -146,6 +147,11 @@ export default function MapLayerControls({
           R
         </IconChip>
       </div>
+      {hasCorridorSpeeds && (
+        <p className="mt-1 max-w-[11rem] px-1 text-[8px] leading-snug text-slate-400">
+          Pente carte : plein = montée · tirets = descente · épaisseur = |%|
+        </p>
+      )}
     </div>
   );
 }

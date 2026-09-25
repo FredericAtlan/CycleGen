@@ -114,7 +114,7 @@
            length="4.5"
            minGap="2.8"
            maxSpeed="50"
-           speedFactor="0.728"
+           speedFactor="1.02"
            speedDev="0.05"
            impatience="0.1"
            actionStepLength="1.0">
@@ -137,7 +137,7 @@
            length="4.5"
            minGap="1.8"
            maxSpeed="60"
-           speedFactor="0.859"
+           speedFactor="1.05"
            speedDev="0.10"
            impatience="0.55"
            actionStepLength="1.0">

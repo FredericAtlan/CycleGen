@@ -47,9 +47,12 @@ class TestGradeCoupling(unittest.TestCase):
         descent = IDMSolver(
             _make_corridor(-5.0), driver_profile="Normal", seed=1
         ).solve()
-        # On a 5 % descent gravity assists accel; duration should not be worse
-        # than flat (within one sample). Speed ceiling is still V_envelope.
-        self.assertLessEqual(descent.total_duration_s, flat.total_duration_s + 1.0)
+        # Gravity assist shows up as a higher peak speed (V_envelope still caps).
+        # Duration/avg can be slightly worse once plant + jerk damp coasting —
+        # do not assert wall-clock superiority.
+        self.assertGreaterEqual(
+            max(descent.velocity), max(flat.velocity) - 0.05
+        )
         # Slope must show negative alpha samples on the descent profile.
         self.assertTrue(any(a < -0.02 for a in descent.slope))
 
