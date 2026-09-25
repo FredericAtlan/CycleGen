@@ -1,4 +1,4 @@
-# Étape 3 — Comportement
+# Étape 3 — Conducteur
 
 > Objectif : choisir **comment** le véhicule suit l’enveloppe (moteur + conducteur + véhicule), puis **générer** le cycle \(v(t)\).
 
@@ -6,7 +6,7 @@
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│  SIDEBAR · Comportement                                     │
+│  SIDEBAR · Conducteur                                     │
 │                                                             │
 │  ┌─ Vmax · Virage · Bruit ─────────────────────────────┐   │
 │  │ Vmax véhicule (km/h)                                │   │
@@ -228,4 +228,4 @@ Tronçons \([s_0, s_1)\) avec physique locale (`a_max`, `b_comf`, `speed_factor`
 
 ## Suite
 
-Profil consolidé → **Résultats** : graphiques, mécanique, export Excel/CSV, Versus.
+Profil consolidé → **Cycle** : graphiques, mécanique, export Excel/CSV, Versus.

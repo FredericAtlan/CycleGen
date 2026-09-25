@@ -158,8 +158,8 @@ Page dédiée **`/compare`** (`CompareStudio`) : bibliothèque de cycles (corpus
 |------|------------|------|
 | Gauche | `Sidebar`, `SimParamsPanel`, `DriverZonesEditor` | Trajet, enveloppe, conducteur, zones, Générer / Appliquer |
 | Centre | `DynamicMap` / `MapView`, contrôles caméra / couches | Carte, ego, feux, focus range |
-| Droite | `RightPanel` → corridor / simu live / `FinalProfilesPanel` | Contraintes, live, graphs, export |
-| Workspace | `CycleWorkspaceBar`, trips localStorage | Sauvegardes, injecter un cycle référence |
+| Droite | `ConstraintWorkspace` (step 2) · `ResultsAnalysisPanel` (step 4) | Contraintes, analyse, export |
+| Persist | `tripStore` / IndexedDB profils | Sauvegardes locales, injecter un cycle référence |
 | Aide | `HelpDrawer` + `public/docs/science/*` | Doc scientifique embarquée |
 
 ### 6.3 Bibliothèques client (`src/lib/`)

@@ -21,9 +21,9 @@ Migré ailleurs (pour ne pas mélanger domaine environnemental et physique véhi
 
 | Contrôle | Ancienne place | Nouvelle place |
 |---|---|---|
-| Vitesse max véhicule (Vmax) | Trajet / Contraintes | **Comportement** (step 3) |
-| Latéral en virage `a_y` | Contraintes | **Comportement** (step 3) — scaling client `V_curve ∝ √a_y` |
-| Bruit stochastique Markov | Trajet | **Comportement** (step 3) |
+| Vitesse max véhicule (Vmax) | Trajet / Contraintes | **Conducteur** (step 3) |
+| Latéral en virage `a_y` | Contraintes | **Conducteur** (step 3) — scaling client `V_curve ∝ √a_y` |
+| Bruit stochastique Markov | Trajet | **Conducteur** (step 3) |
 | Sélection routeur (single) | Trajet (select) | **Trajet** (cases à cocher multi) |
 
 ## Flux UI
@@ -395,4 +395,4 @@ Code : `routes_corridor.py`, `spatial_processor.py`, `curvature.py`.
 
 ## Suite
 
-Cycle spatial prêt → **Comportement** (étape 3) : `POST /api/simulate/start` + WebSocket.
+Cycle spatial prêt → **Conducteur** (étape 3) : `POST /api/simulate/start` + WebSocket.
