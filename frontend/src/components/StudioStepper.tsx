@@ -30,15 +30,20 @@ export default function StudioStepper({
   cycleTitle = null,
 }: StudioStepperProps) {
   return (
-    <div className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 sm:gap-3">
-      <button
-        type="button"
-        onClick={() => onLeaveToMenu?.()}
-        className="shrink-0 text-[11px] font-semibold text-slate-500 hover:text-slate-800"
-        title="Menu principal — recommencer"
-      >
-        ← Menu
-      </button>
+    <div
+      className="flex h-11 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 sm:gap-3"
+      data-testid="studio-stepper"
+    >
+      {onLeaveToMenu ? (
+        <button
+          type="button"
+          onClick={() => onLeaveToMenu()}
+          className="shrink-0 text-[11px] font-semibold text-slate-500 hover:text-slate-800"
+          title="Accueil — recommencer"
+        >
+          ← Accueil
+        </button>
+      ) : null}
       {cycleTitle ? (
         <div
           className="hidden min-w-0 max-w-[40%] shrink truncate text-[11px] font-semibold tabular-nums text-slate-800 sm:block md:max-w-[46%]"

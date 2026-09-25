@@ -9,71 +9,10 @@ import WarningsBell from "@/components/WarningsBell";
 import { useApiConsoleOptional } from "@/components/ApiConsoleContext";
 import {
   useHeaderChromeOptional,
-  type StudioHeaderChrome,
   type VersusHeaderChrome,
 } from "@/components/HeaderChromeContext";
-import { STUDIO_WIZARD_LABELS } from "@/components/StudioStepper";
 import { APP_AUTHOR, APP_NAME, APP_VERSION } from "@/lib/branding";
 import { hasStudioSession } from "@/lib/studioSession";
-
-function StudioSteps({ chrome }: { chrome: StudioHeaderChrome }) {
-  return (
-    <div className="flex min-w-0 flex-1 items-center gap-1.5">
-      {chrome.cycleTitle ? (
-        <div
-          className="hidden min-w-0 max-w-[9rem] shrink truncate text-[10px] font-semibold tabular-nums text-slate-600 lg:block xl:max-w-[14rem]"
-          title={chrome.cycleTitle}
-        >
-          {chrome.cycleTitle}
-        </div>
-      ) : null}
-      <ol className="flex min-w-0 flex-1 items-center gap-0.5">
-        {([1, 2, 3, 4] as const).map((n, i) => {
-          const unlocked =
-            chrome.lockToStep != null
-              ? n === chrome.lockToStep
-              : n <= chrome.maxUnlocked;
-          const active = n === chrome.activeStep;
-          return (
-            <li key={n} className="flex min-w-0 flex-1 items-center gap-0.5">
-              {i > 0 && (
-                <span className="hidden h-px w-2 shrink-0 bg-slate-200 sm:block" />
-              )}
-              <button
-                type="button"
-                disabled={!unlocked}
-                onClick={() => unlocked && chrome.onStepChange(n)}
-                className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 sm:justify-start sm:px-2 sm:text-[11px] ${
-                  active
-                    ? "bg-slate-900 text-white"
-                    : unlocked
-                      ? "text-slate-700 hover:bg-slate-100"
-                      : "text-slate-400"
-                }`}
-                title={STUDIO_WIZARD_LABELS[n]}
-              >
-                <span
-                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] ${
-                    active
-                      ? "bg-white text-slate-900"
-                      : unlocked
-                        ? "bg-brand/15 text-brand"
-                        : "bg-slate-100"
-                  }`}
-                >
-                  {n}
-                </span>
-                <span className="hidden truncate md:inline">
-                  {STUDIO_WIZARD_LABELS[n]}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ol>
-    </div>
-  );
-}
 
 function VersusControls({ chrome }: { chrome: VersusHeaderChrome }) {
   return (
@@ -139,6 +78,7 @@ export default function AppHeader() {
   const chrome = headerChrome?.chrome ?? null;
   const [mounted, setMounted] = useState(false);
   const [resumeStudio, setResumeStudio] = useState(false);
+  const [plusOpen, setPlusOpen] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
@@ -146,6 +86,17 @@ export default function AppHeader() {
     if (!mounted) return;
     setResumeStudio(hasStudioSession());
   }, [mounted, pathname]);
+
+  useEffect(() => {
+    if (!plusOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.("[data-plus-menu]")) return;
+      setPlusOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [plusOpen]);
 
   useEffect(() => {
     if (!help) return;
@@ -169,7 +120,15 @@ export default function AppHeader() {
   }, [help]);
 
   const versus = mounted && (pathname?.startsWith("/compare") ?? false);
-  const studio = mounted && !versus;
+  const [libActive, setLibActive] = useState(false);
+  const [createActive, setCreateActive] = useState(false);
+  useEffect(() => {
+    if (!mounted || typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const mode = sp.get("mode");
+    setLibActive(!versus && mode === "library");
+    setCreateActive(!versus && mode === "create");
+  }, [mounted, pathname, versus]);
 
   const linkClass = (active: boolean) =>
     `rounded-md px-2.5 py-1.5 text-xs font-semibold sm:px-3 ${
@@ -178,8 +137,9 @@ export default function AppHeader() {
         : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
     }`;
 
-  const studioHref = resumeStudio ? "/?mode=create" : "/";
+  const createHref = "/?mode=create";
   const showMenu = chrome?.kind === "studio";
+  const homeActive = mounted && !versus && !libActive && !createActive && !showMenu;
 
   return (
     <header
@@ -206,70 +166,117 @@ export default function AppHeader() {
         </div>
       </div>
 
-      <nav className="flex shrink-0 items-center gap-0.5" aria-label="Principal">
+      <nav className="flex min-w-0 flex-1 shrink items-center gap-0.5" aria-label="Principal">
         {showMenu && chrome.kind === "studio" && (
           <button
             type="button"
             onClick={chrome.onLeaveToMenu}
             className="rounded-md px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 sm:px-2.5"
-            title="Menu principal — quitter le studio"
+            title="Accueil — quitter le studio"
           >
-            Menu
+            Accueil
           </button>
         )}
         {versus && (
           <Link
             href="/"
             className="rounded-md px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 sm:px-2.5"
-            title="Menu principal — choix du mode"
+            title="Accueil — choix du mode"
           >
-            Menu
+            Accueil
+          </Link>
+        )}
+        {!showMenu && !versus && (
+          <Link href="/" className={linkClass(homeActive)} title="Accueil">
+            Accueil
           </Link>
         )}
         <Link
-          href={studioHref}
-          className={linkClass(studio)}
+          href={createHref}
+          className={linkClass(createActive || showMenu)}
           title={
             resumeStudio
-              ? "Reprendre la session Studio en cours"
-              : "Studio"
+              ? "Reprendre la session Créer en cours"
+              : "Créer un cycle"
           }
         >
-          Studio
+          Créer
+        </Link>
+        <Link
+          href="/?mode=library"
+          className={linkClass(libActive)}
+          title="Bibliothèque de cycles"
+        >
+          Bibliothèque
         </Link>
         <Link href="/compare" className={linkClass(versus)}>
           Versus
         </Link>
+        {chrome?.kind === "studio" && chrome.cycleTitle ? (
+          <span
+            className="ml-1 hidden min-w-0 max-w-[12rem] truncate text-[10px] font-semibold tabular-nums text-slate-500 lg:inline xl:max-w-[18rem]"
+            title={chrome.cycleTitle}
+          >
+            {chrome.cycleTitle}
+          </span>
+        ) : null}
       </nav>
 
-      {chrome?.kind === "studio" && <StudioSteps chrome={chrome} />}
       {chrome?.kind === "versus" && <VersusControls chrome={chrome} />}
 
-      <div
-        className={`flex shrink-0 items-center gap-1 ${chrome ? "" : "ml-auto"}`}
-      >
-        {apiConsole && (
+      <div className="relative flex shrink-0 items-center gap-1" data-plus-menu>
+        <div className="relative">
           <button
             type="button"
-            onClick={apiConsole.toggle}
-            className={`inline-flex h-8 items-center gap-1 rounded-md border px-2 font-mono text-[10px] font-semibold uppercase tracking-wide transition ${
-              apiConsole.open
-                ? "border-slate-800 bg-slate-900 text-emerald-300"
+            onClick={() => setPlusOpen((o) => !o)}
+            className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2 text-[10px] font-semibold uppercase tracking-wide transition ${
+              plusOpen || apiConsole?.open
+                ? "border-slate-800 bg-slate-900 text-white"
                 : "border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
             }`}
-            title="Console API — connexion & récupération"
-            aria-label="Console API"
-            aria-pressed={apiConsole.open}
+            title="Plus — console API, préférences"
+            aria-label="Menu Plus"
+            aria-expanded={plusOpen}
+            aria-haspopup="menu"
           >
             <span
               className={`h-1.5 w-1.5 rounded-full ${
-                apiConsole.open ? "bg-emerald-400" : "bg-slate-400"
+                apiConsole?.open ? "bg-emerald-400" : "bg-slate-400"
               }`}
               aria-hidden
             />
-            API
+            Plus
           </button>
-        )}
+          {plusOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-full z-50 mt-1 min-w-[11rem] rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+            >
+              {apiConsole && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    apiConsole.toggle();
+                    setPlusOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      apiConsole.open ? "bg-emerald-500" : "bg-slate-300"
+                    }`}
+                    aria-hidden
+                  />
+                  Console API
+                </button>
+              )}
+              <div className="border-t border-slate-100 px-3 py-1.5 font-mono text-[9px] text-slate-400">
+                v{APP_VERSION}
+              </div>
+            </div>
+          )}
+        </div>
         <WarningsBell />
         {help && (
           <button

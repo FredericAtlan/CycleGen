@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * @deprecated Not mounted by CycleGenShell (tabs current/saved/corpus/compare).
+ * Sprint A′ — keep file for possible revival; do not wire without product decision.
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {

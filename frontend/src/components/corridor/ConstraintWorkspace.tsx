@@ -154,7 +154,20 @@ export default function ConstraintWorkspace(props: ConstraintWorkspaceProps) {
     onRequestRebuild,
   } = props;
 
-  const [tab, setTab] = useState<Tab>("both");
+  const [tab, setTabState] = useState<Tab>(() => {
+    if (typeof window === "undefined") return "both";
+    const raw = window.localStorage.getItem("cyclegen.constraintTab");
+    if (raw === "speed" || raw === "slope" || raw === "both") return raw;
+    return "both";
+  });
+  const setTab = (next: Tab) => {
+    setTabState(next);
+    try {
+      window.localStorage.setItem("cyclegen.constraintTab", next);
+    } catch {
+      /* ignore quota */
+    }
+  };
 
   const routerSummary = useMemo(() => {
     if (!routersUsed?.length) return null;

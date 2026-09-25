@@ -27,6 +27,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 type FocusRenderer = {
   title: string;
@@ -53,10 +54,16 @@ export function ChartFocusHostProvider({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
   const registry = useRef(new Map<string, FocusRenderer>());
   const [, forceTick] = useState(0);
+  const panelRef = useRef<HTMLElement | null>(null);
+  const reducedMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useFocusTrap(focus != null, panelRef);
 
   const register = useCallback((id: string, renderer: FocusRenderer) => {
     registry.current.set(id, renderer);
@@ -93,11 +100,17 @@ export function ChartFocusHostProvider({ children }: { children: ReactNode }) {
               onClick={() => setFocus(null)}
             />
             <aside
+              ref={panelRef}
               className="relative flex h-full w-[75vw] min-w-[20rem] max-w-full flex-col border-l border-slate-200 bg-white shadow-2xl"
-              style={{ animation: "cyclegen-focus-drawer-in 260ms ease-out" }}
+              style={
+                reducedMotion
+                  ? undefined
+                  : { animation: "cyclegen-focus-drawer-in 260ms ease-out" }
+              }
               role="dialog"
               aria-modal="true"
               aria-label={renderer.title}
+              tabIndex={-1}
             >
               <style>{`
                 @keyframes cyclegen-focus-drawer-in {

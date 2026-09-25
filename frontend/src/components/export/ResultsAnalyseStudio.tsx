@@ -595,7 +595,7 @@ function FocusChart({
               <ReferenceLine
                 yAxisId="left"
                 x={cursorT}
-                stroke={playheadOn ? "#ea580c" : highlightT != null ? "#0f172a" : "#94a3b8"}
+                stroke={playheadOn ? "#4338ca" : highlightT != null ? "#0f172a" : "#94a3b8"}
                 strokeWidth={playheadOn ? 2 : highlightT != null ? 1.5 : 1}
                 strokeDasharray={playheadOn ? undefined : highlightT != null ? "4 3" : "2 2"}
                 ifOverflow="extendDomain"
@@ -604,7 +604,7 @@ function FocusChart({
                     ? {
                         value: formatTimeLabel(cursorT),
                         position: "insideTopLeft",
-                        fill: "#ea580c",
+                        fill: "#4338ca",
                         fontSize: 10,
                         fontWeight: 700,
                       }
@@ -851,7 +851,7 @@ function CompareCell({
             {cursorT != null && (
               <ReferenceLine
                 x={cursorT}
-                stroke={playheadOn ? "#ea580c" : "#0f172a"}
+                stroke={playheadOn ? "#4338ca" : "#0f172a"}
                 strokeWidth={playheadOn ? 2 : 1.25}
                 strokeDasharray={playheadOn ? undefined : "4 3"}
                 ifOverflow="extendDomain"

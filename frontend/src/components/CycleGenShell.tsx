@@ -21,7 +21,7 @@ import {
   DEFAULT_MAP_SPEED_LAYERS,
   type MapSpeedLayers,
 } from "@/components/MapLayerControls";
-import {
+import StudioStepper, {
   type StudioWizardStep,
 } from "@/components/StudioStepper";
 import { useHeaderChrome } from "@/components/HeaderChromeContext";
@@ -3025,6 +3025,16 @@ export default function CycleGenShell() {
   return (
     <ChartFocusHostProvider>
     <div className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-slate-50 text-slate-900">
+      <StudioStepper
+        activeStep={noGpsBase ? 4 : activeStep}
+        maxUnlocked={noGpsBase ? 4 : maxUnlocked}
+        onStepChange={(step) => {
+          if (noGpsBase && step !== 4) return;
+          setActiveStep(step);
+        }}
+        lockToStep={noGpsBase ? 4 : undefined}
+        cycleTitle={headerCycleTitle}
+      />
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
       {!hideSidebar && (
       <Sidebar
