@@ -45,6 +45,8 @@ export type ResultsAnalysisPanelProps = {
   highlightT?: number | null;
   /** Pan analyse charts to follow the playhead while replaying. */
   followPlayhead?: boolean;
+  /** Keyboard scrub / moment jump → seek playhead. */
+  onSeekT?: (t: number) => void;
   trafficSource?: string | null;
   warnings?: CycleGenWarning[];
   driverProfile: DriverProfile;
@@ -112,6 +114,7 @@ export default function ResultsAnalysisPanel({
   onBrushRangeS,
   highlightT = null,
   followPlayhead = false,
+  onSeekT,
   trafficSource = null,
   warnings = [],
   driverProfile,
@@ -467,6 +470,7 @@ export default function ResultsAnalysisPanel({
         onBrushRangeS={noGps ? undefined : onBrushRangeS}
         highlightT={highlightT}
         followPlayhead={followPlayhead}
+        onSeekT={onSeekT}
         warnings={displayWarnings}
         noGps={noGps}
         hasVehicle={vehicle != null}

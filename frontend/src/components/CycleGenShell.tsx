@@ -1650,8 +1650,15 @@ export default function CycleGenShell() {
     setMaxSpeedKmh(130);
     setEnableMarkov(false);
     setAY(3.5);
+    setPreferredEngine("idm");
     const mask: EnvelopeMask = { legal: true, traffic: false, curve: true };
     setEnvelopeMask(mask);
+    setMapSpeedLayers((prev) => ({
+      ...prev,
+      legal: true,
+      traffic: false,
+      curve: true,
+    }));
     setCorridor((prev) =>
       prev
         ? applyEnvelopeMask(prev, mask, {
@@ -3403,6 +3410,7 @@ export default function CycleGenShell() {
               }}
               onCursorS={handleCursorS}
               onBrushRangeS={handleBrushRangeS}
+              brushRangeS={brushRange}
               highlightS={
                 playback.playing
                   ? playback.s
@@ -3450,6 +3458,7 @@ export default function CycleGenShell() {
               onBrushRangeS={handleBrushRangeS}
               highlightT={playback.ready ? playback.t : null}
               followPlayhead={playback.playing}
+              onSeekT={playback.seekT}
               trafficSource={trafficSource}
               warnings={warnings}
               driverProfile={driverProfile}

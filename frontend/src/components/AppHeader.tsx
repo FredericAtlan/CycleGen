@@ -193,7 +193,7 @@ export default function AppHeader() {
         )}
         <Link
           href={createHref}
-          className={linkClass(createActive || showMenu)}
+          className={`${linkClass(createActive || showMenu)} inline-flex items-center gap-1.5`}
           title={
             resumeStudio
               ? "Reprendre la session Créer en cours"
@@ -201,6 +201,14 @@ export default function AppHeader() {
           }
         >
           Créer
+          {resumeStudio && !showMenu ? (
+            <span
+              className="rounded bg-emerald-100 px-1 py-px text-[9px] font-bold uppercase tracking-wide text-emerald-800"
+              title="Session studio en cours"
+            >
+              Session
+            </span>
+          ) : null}
         </Link>
         <Link
           href="/?mode=library"

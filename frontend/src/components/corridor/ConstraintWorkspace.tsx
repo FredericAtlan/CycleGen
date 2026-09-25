@@ -100,6 +100,8 @@ export type ConstraintWorkspaceProps = {
   onBrushRangeS?: (r: { s0: number; s1: number } | null) => void;
   onInspectS?: (s_m: number) => void;
   highlightS?: number | null;
+  /** Shared brush from speed chart — mirrored on pente. */
+  brushRangeS?: { s0: number; s1: number } | null;
 
   // Rebuild trigger — called with a debounce by parent (300 ms).
   onRequestRebuild?: () => void;
@@ -151,6 +153,7 @@ export default function ConstraintWorkspace(props: ConstraintWorkspaceProps) {
     onBrushRangeS,
     onInspectS,
     highlightS,
+    brushRangeS,
     onRequestRebuild,
   } = props;
 
@@ -466,6 +469,7 @@ export default function ConstraintWorkspace(props: ConstraintWorkspaceProps) {
                     onSlopeUnitChange={onSlopeUnitChange}
                     tall
                     highlightS={highlightS}
+                    brushRangeS={brushRangeS}
                     onCursorS={onCursorS}
                     syncEnabled
                   />
@@ -476,6 +480,7 @@ export default function ConstraintWorkspace(props: ConstraintWorkspaceProps) {
                   slopeUnit={slopeUnit}
                   onSlopeUnitChange={onSlopeUnitChange}
                   highlightS={highlightS}
+                  brushRangeS={brushRangeS}
                   onCursorS={onCursorS}
                   syncEnabled
                 />

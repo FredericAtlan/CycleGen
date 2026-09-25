@@ -40,6 +40,7 @@ export default function PlaybackBar({ playback, className = "" }: PlaybackBarPro
       className={`flex flex-wrap items-center gap-2 border-t border-slate-200 bg-white/95 px-2.5 py-1.5 shadow-[0_-4px_12px_rgba(15,23,42,0.04)] backdrop-blur ${className}`}
       role="group"
       aria-label="Lecture du cycle"
+      tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === " " || e.key === "k") {
           e.preventDefault();
@@ -47,12 +48,15 @@ export default function PlaybackBar({ playback, className = "" }: PlaybackBarPro
         } else if (e.key === "Home") {
           e.preventDefault();
           reset();
+        } else if (e.key === "End") {
+          e.preventDefault();
+          seekT(duration);
         } else if (e.key === "ArrowLeft") {
           e.preventDefault();
-          seekT(Math.max(0, t - 1));
+          seekT(Math.max(0, t - (e.shiftKey ? 5 : 1)));
         } else if (e.key === "ArrowRight") {
           e.preventDefault();
-          seekT(Math.min(duration, t + 1));
+          seekT(Math.min(duration, t + (e.shiftKey ? 5 : 1)));
         }
       }}
     >

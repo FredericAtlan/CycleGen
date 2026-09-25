@@ -10,6 +10,7 @@ import {
   YAxis,
   CartesianGrid,
   ReferenceLine,
+  ReferenceArea,
 } from "recharts";
 import type { SpatialCorridor } from "@/lib/types";
 import {
@@ -29,6 +30,8 @@ type SlopeChartProps = {
   highlightS?: number | null;
   onCursorS?: (s_m: number | null) => void;
   syncEnabled?: boolean;
+  /** Shared brush portion from speed chart (m). */
+  brushRangeS?: { s0: number; s1: number } | null;
 };
 
 function buildData(corridor: SpatialCorridor, unit: SlopeUnit) {
@@ -59,6 +62,7 @@ export default function SlopeChart({
   highlightS = null,
   onCursorS,
   syncEnabled = true,
+  brushRangeS = null,
 }: SlopeChartProps) {
   const data = buildData(corridor, slopeUnit);
   const unitLabel = slopeUnitLabel(slopeUnit);
@@ -145,6 +149,17 @@ export default function SlopeChart({
               ]}
               labelFormatter={(label) => `s = ${Number(label).toFixed(2)} km`}
             />
+            {brushRangeS &&
+              Number.isFinite(brushRangeS.s0) &&
+              Number.isFinite(brushRangeS.s1) && (
+                <ReferenceArea
+                  x1={Math.min(brushRangeS.s0, brushRangeS.s1) / 1000}
+                  x2={Math.max(brushRangeS.s0, brushRangeS.s1) / 1000}
+                  fill="#f59e0b"
+                  fillOpacity={0.12}
+                  strokeOpacity={0}
+                />
+              )}
             {highlightS != null && Number.isFinite(highlightS) && (
               <ReferenceLine
                 x={highlightS / 1000}

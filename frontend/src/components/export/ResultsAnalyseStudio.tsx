@@ -11,6 +11,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent,
   type MouseEvent,
 } from "react";
 import { toJpeg } from "html-to-image";
@@ -919,6 +920,8 @@ export type ResultsAnalyseStudioProps = {
   highlightT?: number | null;
   /** Pan zoom window to keep the playhead in view while replaying. */
   followPlayhead?: boolean;
+  /** Keyboard scrub: seek playhead to absolute time (s). */
+  onSeekT?: (t: number) => void;
   warnings?: CycleGenWarning[];
   noGps?: boolean;
   hasVehicle?: boolean;
@@ -947,6 +950,7 @@ export default function ResultsAnalyseStudio({
   onBrushRangeS,
   highlightT = null,
   followPlayhead = false,
+  onSeekT,
   warnings = [],
   noGps = false,
   hasVehicle = true,
@@ -1227,7 +1231,46 @@ export default function ResultsAnalyseStudio({
     setWindowStartT(start);
     setZoomMode("window");
     handleHoverT(t);
+    onSeekT?.(t);
   };
+
+  const scrubPlayhead = useCallback(
+    (deltaS: number) => {
+      const base =
+        highlightT != null && Number.isFinite(highlightT)
+          ? highlightT
+          : hoverT != null && Number.isFinite(hoverT)
+            ? hoverT
+            : tMin;
+      const next = Math.max(tMin, Math.min(tMax, base + deltaS));
+      handleHoverT(next);
+      onSeekT?.(next);
+    },
+    [highlightT, hoverT, tMin, tMax, handleHoverT, onSeekT]
+  );
+
+  const onChartKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        scrubPlayhead(e.shiftKey ? -5 : -1);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        scrubPlayhead(e.shiftKey ? 5 : 1);
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        handleHoverT(tMin);
+        onSeekT?.(tMin);
+      } else if (e.key === "End") {
+        e.preventDefault();
+        handleHoverT(tMax);
+        onSeekT?.(tMax);
+      }
+    },
+    [scrubPlayhead, handleHoverT, onSeekT, tMin, tMax]
+  );
 
   const chartSeriesIds = useMemo(() => {
     if (viewMode === "compare") {
@@ -1979,7 +2022,11 @@ export default function ResultsAnalyseStudio({
 
               <div
                 ref={exportRef}
-                className={`min-h-0 flex-1 ${
+                tabIndex={0}
+                role="region"
+                aria-label="Graphiques d'analyse — flèches pour scrubber, Shift+flèche ±5 s"
+                onKeyDown={onChartKeyDown}
+                className={`min-h-0 flex-1 outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 ${
                   viewMode === "compare"
                     ? "grid grid-cols-2 grid-rows-2 gap-1.5"
                     : ""
