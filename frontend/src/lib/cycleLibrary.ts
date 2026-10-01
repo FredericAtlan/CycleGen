@@ -512,6 +512,88 @@ export async function ensureXspaceAvlSeedCycles(): Promise<{
   }
 }
 
+const RS_FIT_PACK_FLAG = "cyclegen.routeStudioFitPack.v1";
+
+/**
+ * Fetch /data/route_studio_fit_pack.json and merge cycles + drivers.
+ * Idempotent via flag when all expected fit cycle ids are present.
+ */
+export async function ensureRouteStudioFitPack(): Promise<{
+  imported: number;
+  drivers: number;
+  total: number;
+  skipped: boolean;
+}> {
+  if (typeof window === "undefined") {
+    return { imported: 0, drivers: 0, total: 0, skipped: true };
+  }
+  const expected = [
+    "rs_fit_iseran_prudent",
+    "rs_fit_iseran_dynamique",
+    "rs_fit_veleta_prudent",
+    "rs_fit_veleta_dynamique",
+    "rs_fit_stelvio_prudent",
+    "rs_fit_stelvio_dynamique",
+    "rs_fit_grossglockner_prudent",
+    "rs_fit_grossglockner_dynamique",
+    "rs_fit_grossglockner_prea",
+    "rs_avl_grossglockner_prudent",
+    "rs_avl_grossglockner_dynamique",
+    "rs_here_grossglockner_prudent",
+    "rs_here_grossglockner_dynamique",
+    "rs_here_grossglockner_prea",
+    "xspace_prea_grossglockner_ref",
+  ];
+  const existing = new Set(readAll().map((c) => c.id));
+  const missing = expected.filter((id) => !existing.has(id));
+  if (!missing.length && localStorage.getItem(RS_FIT_PACK_FLAG) === "1") {
+    return {
+      imported: 0,
+      drivers: 0,
+      total: readAll().length,
+      skipped: true,
+    };
+  }
+  try {
+    const res = await fetch("/data/route_studio_fit_pack.json", {
+      cache: "no-cache",
+    });
+    if (!res.ok) {
+      return {
+        imported: 0,
+        drivers: 0,
+        total: readAll().length,
+        skipped: true,
+      };
+    }
+    const pack = (await res.json()) as {
+      cycles?: unknown;
+      drivers?: unknown;
+    };
+    const { imported, total } = importSavedCyclesJson(
+      JSON.stringify({ cycles: pack.cycles ?? [] })
+    );
+    let drivers = 0;
+    try {
+      const { upsertDriversFromPack } = await import("@/lib/driverLibrary");
+      drivers = upsertDriversFromPack(pack);
+    } catch {
+      /* optional */
+    }
+    if (imported > 0 || drivers > 0) {
+      localStorage.setItem(RS_FIT_PACK_FLAG, "1");
+    }
+    return { imported, drivers, total, skipped: false };
+  } catch {
+    return {
+      imported: 0,
+      drivers: 0,
+      total: readAll().length,
+      skipped: true,
+    };
+  }
+}
+
 export function listSavedCycles(): SavedCycle[] {
   return readAll();
 }

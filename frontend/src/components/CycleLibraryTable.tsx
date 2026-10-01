@@ -7,6 +7,7 @@ import { CORPUS_FAMILY_LABEL } from "@/lib/corpusGroups";
 import {
   deleteSavedCycle,
   elevationExtremesM,
+  ensureRouteStudioFitPack,
   ensureXspaceAvlSeedCycles,
   listSavedCycles,
   newCycleInstanceId,
@@ -183,6 +184,7 @@ export default function CycleLibraryTable() {
     void (async () => {
       try {
         await ensureXspaceAvlSeedCycles();
+        await ensureRouteStudioFitPack();
         setTick((t) => t + 1);
       } catch {
         /* optional seed */

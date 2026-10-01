@@ -250,4 +250,47 @@ export function findSeedMatching(
   );
 }
 
+/**
+ * Merge drivers from a Route Studio fit pack (or similar JSON).
+ * Upserts by id; marks as seed when pack says so.
+ */
+export function upsertDriversFromPack(raw: unknown): number {
+  let list: unknown[] = [];
+  if (Array.isArray(raw)) {
+    list = raw;
+  } else if (
+    raw &&
+    typeof raw === "object" &&
+    Array.isArray((raw as { drivers?: unknown }).drivers)
+  ) {
+    list = (raw as { drivers: unknown[] }).drivers;
+  } else {
+    return 0;
+  }
+  const incoming = list
+    .map(normalize)
+    .filter((d): d is SavedDriver => !!d);
+  if (!incoming.length) return 0;
+  const now = new Date().toISOString();
+  const byId = new Map(readAll().map((d) => [d.id, d]));
+  let n = 0;
+  for (const d of incoming) {
+    const prev = byId.get(d.id);
+    byId.set(d.id, {
+      ...d,
+      createdAt: prev?.createdAt ?? d.createdAt ?? now,
+      updatedAt: now,
+      seed: d.seed === true || d.id.startsWith("route-studio-"),
+    });
+    n += 1;
+  }
+  const seeds = SEED.map((s) => s.id);
+  const merged = [
+    ...SEED,
+    ...[...byId.values()].filter((d) => !seeds.includes(d.id)),
+  ].slice(0, MAX_DRIVERS + SEED.length);
+  writeAll(merged);
+  return n;
+}
+
 export { physicsEqual };

@@ -148,6 +148,15 @@ class IDMParams:
     jerk_max: float = 1.0
     # Max |da/dt| when braking (m/s³). 0 → falls back to jerk_max.
     jerk_brake_max: float = 0.0
+    # First-order pedal lag on commanded accel (s). 0 disables.
+    # Models finite foot/actuator bandwidth — kills sample-to-sample pumping
+    # without lowering peak a_max / b_comf aggressiveness.
+    pedal_tau_s: float = 0.0
+    # Temporal low-pass on v_des (s). 0 disables.
+    vdes_tau_s: float = 0.0
+    # Soft descent hold gain near v_des (1/s² per m/s overshoot). 0 disables.
+    # Continuous retenue instead of bang-bang hard ceiling + open-loop gravity.
+    descent_hold_gain: float = 0.0
 
 
 # Gemini macroscopic matrix (Eco / Normal / Sport). AVL/BCB via overrides.
@@ -257,6 +266,11 @@ def resolve_profile(
         jerk_brake_max=float(
             overrides.get("jerk_brake_max", base.jerk_brake_max)
         ),
+        pedal_tau_s=float(overrides.get("pedal_tau_s", base.pedal_tau_s)),
+        vdes_tau_s=float(overrides.get("vdes_tau_s", base.vdes_tau_s)),
+        descent_hold_gain=float(
+            overrides.get("descent_hold_gain", base.descent_hold_gain)
+        ),
     )
 
 
@@ -302,6 +316,21 @@ def _params_for_s(
             float(hit["jerk_brake_max"])
             if hit.get("jerk_brake_max") is not None
             else base.jerk_brake_max
+        ),
+        pedal_tau_s=(
+            float(hit["pedal_tau_s"])
+            if hit.get("pedal_tau_s") is not None
+            else base.pedal_tau_s
+        ),
+        vdes_tau_s=(
+            float(hit["vdes_tau_s"])
+            if hit.get("vdes_tau_s") is not None
+            else base.vdes_tau_s
+        ),
+        descent_hold_gain=(
+            float(hit["descent_hold_gain"])
+            if hit.get("descent_hold_gain") is not None
+            else base.descent_hold_gain
         ),
     )
 
@@ -498,6 +527,14 @@ def _apply_jerk_limit(
     if jb <= 0.0:
         return a_cmd
     return a_prev - min(-da, jb * dt)
+
+
+def _first_order_lag(target: float, prev: float, tau_s: float, dt: float) -> float:
+    """Discrete first-order lag: y += (x − y) · (1 − e^(−dt/τ))."""
+    if tau_s <= 1e-6 or dt <= 0.0:
+        return target
+    alpha = 1.0 - math.exp(-dt / tau_s)
+    return prev + alpha * (target - prev)
 
 
 def _idm_accel(
@@ -796,6 +833,8 @@ class IDMSolver:
         v = 0.0
         t = 0.0
         a_prev = 0.0
+        a_filt = 0.0
+        v_des_filt: float | None = None
         stall_steps = 0
         frames: list[SimulationFrame] = []
         gate_steps = 0
@@ -846,6 +885,7 @@ class IDMSolver:
                         v = 0.0
                         a = 0.0
                         a_prev = 0.0
+                        a_filt = 0.0
                         t += self.dt
                         fr = snapshot(a)
                         fr.tls_state = "r"
@@ -857,9 +897,16 @@ class IDMSolver:
 
             v_lim = max(0.0, _interp(s, S, V))
             params = _params_for_s(self.params, self.driver_zones, s)
-            v_des = max(0.1, v_lim * params.speed_factor)
+            v_des_raw = max(0.1, v_lim * params.speed_factor)
             if self.max_speed_mps is not None:
-                v_des = min(v_des, self.max_speed_mps)
+                v_des_raw = min(v_des_raw, self.max_speed_mps)
+            if v_des_filt is None:
+                v_des_filt = v_des_raw
+            else:
+                v_des_filt = _first_order_lag(
+                    v_des_raw, v_des_filt, params.vdes_tau_s, self.dt
+                )
+            v_des = max(0.1, v_des_filt)
 
             gap: float | None = None
             v_lead = 0.0
@@ -925,6 +972,20 @@ class IDMSolver:
             grade_ff = max(0.0, -a_grade)  # >0 in climbs, 0 otherwise
             a_dyn = a_idm + a_grade + grade_ff
 
+            # Soft descent hold: continuous retenue when overshooting v_des
+            # downhill — replaces bang-bang (gravity assist + hard ceiling).
+            if (
+                params.descent_hold_gain > 0.0
+                and alpha_s < -0.01
+                and v > v_des
+            ):
+                overshoot = v - v_des
+                a_hold = -params.descent_hold_gain * overshoot
+                # Don't fight hard braking already demanded by IDM/preview.
+                a_dyn = min(a_dyn, a_hold)
+                # Partially cancel open-loop gravity when holding speed.
+                a_dyn -= 0.55 * a_grade  # a_grade < 0 on descent → subtract less assist
+
             # P2 — MPC-lite preview braking (curve + descent lookahead).
             # Runs on top of the T_h leader scan: the preview horizon
             # (v · T_look) is longer than the collision leader scan and
@@ -972,14 +1033,20 @@ class IDMSolver:
             a_max = params.a_max
             raw = a_dyn + a_noise
             a_clipped = max(a_min, min(a_max, raw))
-            a_final = _apply_jerk_limit(
+            a_jerk = _apply_jerk_limit(
                 a_clipped,
                 a_prev,
                 params.jerk_max,
                 self.dt,
                 jerk_brake=params.jerk_brake_max,
             )
-            if abs(a_clipped - raw) > 1e-9 or abs(a_final - a_clipped) > 1e-9:
+            # Pedal / actuator lag after jerk clip — smooths HF pumping while
+            # preserving peak a_max capability for intentional manoeuvres.
+            a_final = _first_order_lag(
+                a_jerk, a_filt, params.pedal_tau_s, self.dt
+            )
+            a_filt = a_final
+            if abs(a_clipped - raw) > 1e-9 or abs(a_jerk - a_clipped) > 1e-9:
                 clip_hits += 1
             if is_critical:
                 gate_steps += 1
@@ -990,7 +1057,10 @@ class IDMSolver:
             # Near the finish, keep a minimum crawl so we always reach s_end
             if remaining < 80.0:
                 v_next = max(v_next, min(2.0, max(0.5, v_des)))
-            v_next = min(v_next, max(v_des * 1.05, v_des + 2.0, 2.5))
+            # Soft ceiling: allow slight overshoot, pull back continuously.
+            v_cap = max(v_des * 1.08, v_des + 2.5, 2.5)
+            if v_next > v_cap:
+                v_next = v_cap
             s_next = min(s_end, s + v_next * self.dt)
 
             v = v_next

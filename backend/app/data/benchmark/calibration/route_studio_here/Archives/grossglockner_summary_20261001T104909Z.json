@@ -1,0 +1,43 @@
+{
+  "stamp": "20261001T104909Z",
+  "results": [
+    {
+      "route": "grossglockner",
+      "driver": "Route_Studio_Prudent",
+      "duration_s": 997.0,
+      "distance_m": 14641.761882961142,
+      "avg_speed_kmh": 52.86894962754274,
+      "xls": "/Users/fredericatlan/Documents/CycleGen/backend/app/data/benchmark/calibration/route_studio_here/CycleGen_HERE_grossglockner_Route_Studio_Prudent_20261001T104909Z.xls",
+      "xlsx": "/Users/fredericatlan/Documents/CycleGen/backend/app/data/benchmark/calibration/route_studio_here/CycleGen_HERE_grossglockner_Route_Studio_Prudent_20261001T104909Z.xlsx",
+      "here_distance_m": 14638.0,
+      "traffic_source": "HERE/maxSpeed",
+      "origin": [
+        47.1237,
+        12.8314
+      ],
+      "dest": [
+        47.1685,
+        12.8138
+      ]
+    },
+    {
+      "route": "grossglockner",
+      "driver": "Route_Studio_Dynamique",
+      "duration_s": 882.0,
+      "distance_m": 14641.761882961142,
+      "avg_speed_kmh": 59.7622933998414,
+      "xls": "/Users/fredericatlan/Documents/CycleGen/backend/app/data/benchmark/calibration/route_studio_here/CycleGen_HERE_grossglockner_Route_Studio_Dynamique_20261001T104909Z.xls",
+      "xlsx": "/Users/fredericatlan/Documents/CycleGen/backend/app/data/benchmark/calibration/route_studio_here/CycleGen_HERE_grossglockner_Route_Studio_Dynamique_20261001T104909Z.xlsx",
+      "here_distance_m": 14638.0,
+      "traffic_source": "HERE/maxSpeed",
+      "origin": [
+        47.1237,
+        12.8314
+      ],
+      "dest": [
+        47.1685,
+        12.8138
+      ]
+    }
+  ]
+}

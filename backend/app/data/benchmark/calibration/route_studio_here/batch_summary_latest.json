@@ -1,0 +1,98 @@
+{
+  "stamp": "20261001T104055Z",
+  "drivers": {
+    "Route_Studio_Prudent": {
+      "a_max": 1.293,
+      "b_comf": 1.71,
+      "jerk_max": 1.499,
+      "jerk_brake_max": 1.517,
+      "speed_factor": 1.029,
+      "T": 1.8,
+      "T_h": 4.5,
+      "s0": 2.8,
+      "a_y": 3.1,
+      "base_profile": "Prudent"
+    },
+    "Route_Studio_Dynamique": {
+      "a_max": 2.084,
+      "b_comf": 3.474,
+      "jerk_max": 2.996,
+      "jerk_brake_max": 3.002,
+      "speed_factor": 1.052,
+      "T": 1.2,
+      "T_h": 3.0,
+      "s0": 1.8,
+      "a_y": 4.9,
+      "base_profile": "Dynamique"
+    }
+  },
+  "results": [
+    {
+      "route": "iseran",
+      "driver": "Route_Studio_Prudent",
+      "duration_s": 3108.0,
+      "distance_m": 47450.825390599595,
+      "avg_speed_kmh": 54.96234601227752,
+      "xls": "/Users/fredericatlan/Documents/CycleGen/backend/app/data/benchmark/calibration/route_studio_here/CycleGen_HERE_iseran_Route_Studio_Prudent_20261001T104055Z.xls",
+      "xlsx": "/Users/fredericatlan/Documents/CycleGen/backend/app/data/benchmark/calibration/route_studio_here/CycleGen_HERE_iseran_Route_Studio_Prudent_20261001T104055Z.xlsx",
+      "here_distance_m": 47548.0,
+      "traffic_source": "HERE/maxSpeed"
+    },
+    {
+      "route": "iseran",
+      "driver": "Route_Studio_Dynamique",
+      "duration_s": 3010.0,
+      "distance_m": 47450.825390599595,
+      "avg_speed_kmh": 56.751817742909815,
+      "xls": "/Users/fredericatlan/Documents/CycleGen/backend/app/data/benchmark/calibration/route_studio_here/CycleGen_HERE_iseran_Route_Studio_Dynamique_20261001T104055Z.xls",
+      "xlsx": "/Users/fredericatlan/Documents/CycleGen/backend/app/data/benchmark/calibration/route_studio_here/CycleGen_HERE_iseran_Route_Studio_Dynamique_20261001T104055Z.xlsx",
+      "here_distance_m": 47548.0,
+      "traffic_source": "HERE/maxSpeed"
+    },
+    {
+      "route": "stelvio",
+      "driver": "Route_Studio_Prudent",
+      "duration_s": 1545.0,
+      "distance_m": 24887.243772522255,
+      "avg_speed_kmh": 57.98969422723633,
+      "xls": "/Users/fredericatlan/Documents/CycleGen/backend/app/data/benchmark/calibration/route_studio_here/CycleGen_HERE_stelvio_Route_Studio_Prudent_20261001T104055Z.xls",
+      "xlsx": "/Users/fredericatlan/Documents/CycleGen/backend/app/data/benchmark/calibration/route_studio_here/CycleGen_HERE_stelvio_Route_Studio_Prudent_20261001T104055Z.xlsx",
+      "here_distance_m": 24885.0,
+      "traffic_source": "HERE/maxSpeed"
+    },
+    {
+      "route": "stelvio",
+      "driver": "Route_Studio_Dynamique",
+      "duration_s": 1383.0,
+      "distance_m": 24887.243772522255,
+      "avg_speed_kmh": 64.78241329073039,
+      "xls": "/Users/fredericatlan/Documents/CycleGen/backend/app/data/benchmark/calibration/route_studio_here/CycleGen_HERE_stelvio_Route_Studio_Dynamique_20261001T104055Z.xls",
+      "xlsx": "/Users/fredericatlan/Documents/CycleGen/backend/app/data/benchmark/calibration/route_studio_here/CycleGen_HERE_stelvio_Route_Studio_Dynamique_20261001T104055Z.xlsx",
+      "here_distance_m": 24885.0,
+      "traffic_source": "HERE/maxSpeed"
+    },
+    {
+      "route": "veleta",
+      "driver": "Route_Studio_Prudent",
+      "duration_s": 2917.0,
+      "distance_m": 43365.40796156165,
+      "avg_speed_kmh": 53.519187062606086,
+      "xls": "/Users/fredericatlan/Documents/CycleGen/backend/app/data/benchmark/calibration/route_studio_here/CycleGen_HERE_veleta_Route_Studio_Prudent_20261001T104055Z.xls",
+      "xlsx": "/Users/fredericatlan/Documents/CycleGen/backend/app/data/benchmark/calibration/route_studio_here/CycleGen_HERE_veleta_Route_Studio_Prudent_20261001T104055Z.xlsx",
+      "here_distance_m": 43475.0,
+      "traffic_source": "HERE/maxSpeed"
+    },
+    {
+      "route": "veleta",
+      "driver": "Route_Studio_Dynamique",
+      "duration_s": 2775.0,
+      "distance_m": 43365.40796156165,
+      "avg_speed_kmh": 56.25782654472863,
+      "xls": "/Users/fredericatlan/Documents/CycleGen/backend/app/data/benchmark/calibration/route_studio_here/CycleGen_HERE_veleta_Route_Studio_Dynamique_20261001T104055Z.xls",
+      "xlsx": "/Users/fredericatlan/Documents/CycleGen/backend/app/data/benchmark/calibration/route_studio_here/CycleGen_HERE_veleta_Route_Studio_Dynamique_20261001T104055Z.xlsx",
+      "here_distance_m": 43475.0,
+      "traffic_source": "HERE/maxSpeed"
+    }
+  ],
+  "out_dir": "/Users/fredericatlan/Documents/CycleGen/backend/app/data/benchmark/calibration/route_studio_here"
+}

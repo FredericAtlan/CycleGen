@@ -1,0 +1,46 @@
+---
+description: Refonte CycleGen IDE workspace — non-régression, cheap vs expensive, Zustand
+alwaysApply: true
+---
+
+# Refonte CycleGen — MASTER RULES (IDE ingénierie)
+
+Brief : `docs/refonte-studios-brief.md` · Rules longues : `docs/refonte-master-rules.md`.
+
+Tu conçois un **IDE d’ingénierie** (AVL / Simulink), pas un SaaS grand public. Vérité scientifique et perf > design web conventionnel.
+
+## 1. Workspace unifié (pas de silos métier)
+
+- Parcours principal ≠ navigation `/?mode=driver|vehicle|cycle`.
+- Layout dominant : `[ Explorateur assets G ] + [ Canvas carte & courbes C ] + [ Inspecteur D ] + [ Console bas ]`.
+- Hub / Accueil = onboarding ou projets récents seulement — ne casse pas la boucle une fois le projet ouvert.
+- `/?mode=create` (CycleGenShell) reste **non régressé** jusqu’à migration progressive vers le workspace ; ne pas casser e2e.
+
+## 2. Inspecteurs vs ingestion lourde
+
+- Édition Conducteur / Véhicule = **Inspecteur** (sélection explorateur).
+- Batch RS (8 XLS fingerprint), comparaisons banques = **modales / drawers denses**, pas un inspecteur 200px.
+
+## 3. Cheap vs Expensive
+
+- **Update dynamics (cheap)** : params IDM / véhicule → re-sim debounced 50–100 ms, sans bouton « Générer ».
+- **Rebuild corridor (expensive)** : HERE/OSRM/Mapbox, elevation, feux → action **explicite** utilisateur. Labels sémantiques obligatoires.
+- Fit RS = **jobs async** (`POST …/jobs` + poll) — jamais POST sync long.
+
+## 4. Sync spatio-temporelle (Zustand)
+
+- Store : `hoverIndex` / `playhead` lient Recharts ↔ marqueur Leaflet ↔ pente.
+- Ledger 3 strates : config | géométrie | résultats. Pas de corridor via URL.
+
+## 5. Austérité (zéro bullshit UI)
+
+- Slate/brand CycleGen. Mono pour scalaires/KPIs. Couleur = sémantique (ex. rouge freinage &lt; −1 m/s²).
+- Pas de métier (interp / smooth / Markov) dans React.
+
+## 6. Non-régression & batch RS
+
+- E2E Playwright + `POST /api/simulate/start` verts à chaque commit.
+- Préserver features batch : geometry-lock, pedal lag solver, pack `route_studio_*`, exports, Versus, HTML/CSV calibration.
+- Une phase à la fois ; hors périmètre = interdit.
+- Pedal Pydantic default **0** ; fingerprint + SHA-256 source ; banques via interfaces async (Dexie).
+- Thin routers ; vérité = `kinematic_solver` + `rs_*.py`.

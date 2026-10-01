@@ -1,6 +1,8 @@
 # CycleGen — Architecture logicielle
 
 > Document **outil / code** : comment l’application est découpée et branchée.  
+> Refonte studios (Gemini) : [`docs/refonte-studios-brief.md`](refonte-studios-brief.md) · [`docs/refonte-master-rules.md`](refonte-master-rules.md).
+>
 > Pour le **modèle scientifique** (équations, enveloppes, IDM, feux), voir [`docs/science/`](science/README.md).
 
 ## 1. Objectif produit
