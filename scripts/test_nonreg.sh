@@ -40,6 +40,9 @@ else
   if ! (cd "$FRONTEND" && npm run test:unit-url); then
     fail "frontend check-api-url"
   fi
+  if ! (cd "$FRONTEND" && npm run test:unit-bench); then
+    fail "frontend check-export-bench"
+  fi
 fi
 
 if [[ "${PLAYWRIGHT:-0}" == "1" ]]; then

@@ -10,6 +10,11 @@ import {
   downloadCycleCsvEnriched,
   downloadCycleExcel,
 } from "@/lib/exportWorkbook";
+import {
+  downloadCarMakerSpeed,
+  downloadOpenDrive,
+  downloadPumaRgv,
+} from "@/lib/exportBench";
 import { buildInspectRunMeta, type InspectRunMeta } from "@/lib/inspectRunMeta";
 import type { DriverPhysics } from "@/lib/driverPresets";
 import type { EnvelopeMask } from "@/lib/corridorEdit";
@@ -58,7 +63,13 @@ type DownloadButtonsProps = {
   figureExportDisabled?: boolean;
 };
 
-type BusyKind = ExportFormat | "xlsx" | "csv_rich";
+type BusyKind =
+  | ExportFormat
+  | "xlsx"
+  | "csv_rich"
+  | "puma_rgv"
+  | "carmaker"
+  | "opendrive";
 
 const btnBase =
   "inline-flex min-w-0 items-center justify-center gap-1 rounded-md text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50";
@@ -251,6 +262,48 @@ export default function DownloadButtons({
     }
   };
 
+  const benchInput = () => ({
+    profile,
+    corridor,
+    name: saveTitle?.trim() || resolvedMeta.entries.find((e) => e.key === "titre")?.value || routeLabel || null,
+  });
+
+  const handlePumaRgv = () => {
+    setBusy("puma_rgv");
+    setError(null);
+    try {
+      downloadPumaRgv(benchInput());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Export PUMA Rg/v échoué");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleCarMaker = () => {
+    setBusy("carmaker");
+    setError(null);
+    try {
+      downloadCarMakerSpeed(benchInput());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Export CarMaker échoué");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleOpenDrive = () => {
+    setBusy("opendrive");
+    setError(null);
+    try {
+      downloadOpenDrive(benchInput());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Export OpenDRIVE échoué");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const handleLegacy = async (format: ExportFormat) => {
     setBusy(format);
     setError(null);
@@ -285,7 +338,7 @@ export default function DownloadButtons({
           type="button"
           onClick={() => setMenuOpen((v) => !v)}
           disabled={busy != null}
-          title="Exporter le cycle (Excel, CSV, XML)"
+          title="Exporter le cycle (Excel, CSV, XML, PUMA, CarMaker, OpenDRIVE)"
           aria-expanded={menuOpen}
           className={`${btnBase} border border-slate-200 bg-white px-2 py-1 text-[10px] text-slate-700 hover:bg-slate-50`}
         >
@@ -341,6 +394,49 @@ export default function DownloadButtons({
               title="Export XML (API)"
             >
               XML
+            </button>
+            <div className="my-1 border-t border-slate-100" />
+            <p className="px-3 py-1 text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+              Banc / OEM
+            </p>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                handlePumaRgv();
+              }}
+              disabled={busy != null}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+              title="PUMA Dynamic SSQ / Driver’s Aid — mode Rg/v (Time, Velocity km/h, Gradient %)"
+            >
+              PUMA Rg/v (.csv)
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                handleCarMaker();
+              }}
+              disabled={busy != null}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+              title="Profil vitesse CarMaker / IPGDriver (Time, Velocity km/h)"
+            >
+              CarMaker speed (.txt)
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                handleOpenDrive();
+              }}
+              disabled={busy != null}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+              title="Route OpenDRIVE minimale (élévation) pour Scenario Editor"
+            >
+              OpenDRIVE (.xodr)
             </button>
             {(onExportJpegFigure || onExportCsvWindow) && (
               <>
@@ -428,9 +524,44 @@ export default function DownloadButtons({
           <span className="truncate">XML</span>
         </button>
       </div>
+      <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+        Banc / OEM
+      </p>
+      <div className="grid min-w-0 grid-cols-1 gap-1.5 sm:grid-cols-3">
+        <button
+          type="button"
+          onClick={handlePumaRgv}
+          disabled={busy != null}
+          className={`${btnBase} border border-slate-200 bg-white px-2 py-2 text-slate-700 hover:bg-slate-50`}
+          title="PUMA Dynamic SSQ — Rg/v (Time, V km/h, Gradient %)"
+        >
+          {busy === "puma_rgv" && <Spinner />}
+          <span className="truncate">PUMA Rg/v</span>
+        </button>
+        <button
+          type="button"
+          onClick={handleCarMaker}
+          disabled={busy != null}
+          className={`${btnBase} border border-slate-200 bg-white px-2 py-2 text-slate-700 hover:bg-slate-50`}
+          title="Profil vitesse CarMaker / IPGDriver"
+        >
+          {busy === "carmaker" && <Spinner />}
+          <span className="truncate">CarMaker</span>
+        </button>
+        <button
+          type="button"
+          onClick={handleOpenDrive}
+          disabled={busy != null}
+          className={`${btnBase} border border-slate-200 bg-white px-2 py-2 text-slate-700 hover:bg-slate-50`}
+          title="OpenDRIVE .xodr (route + élévation)"
+        >
+          {busy === "opendrive" && <Spinner />}
+          <span className="truncate">OpenDRIVE</span>
+        </button>
+      </div>
       <p className="break-words text-[10px] leading-snug text-slate-500">
-        Excel : Traçabilité (+ carte) · Profil · Courbes · Unités. CSV : même profil +
-        lignes <code className="rounded bg-slate-100 px-0.5">#</code>. Priorité{" "}
+        Excel : Traçabilité (+ carte) · Profil · Courbes · Unités. Banc : PUMA
+        Rg/v (CSV), CarMaker speed (TXT), OpenDRIVE (XODR). Priorité{" "}
         <span className="font-semibold text-slate-700">time · v · pente %</span>
         {vehicle
           ? "."

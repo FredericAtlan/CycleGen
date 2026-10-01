@@ -9,6 +9,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test:unit-url": "node scripts/check-api-url.mjs",
+    "test:unit-bench": "node scripts/check-export-bench.mjs",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test e2e/smoke.spec.ts"
   },
