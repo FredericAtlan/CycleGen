@@ -22,6 +22,11 @@ type RoadLoupe3DProps = {
   corridor: SpatialCorridor;
   s_m: number;
   className?: string;
+  /** Narrow map rail — stack canvases, smaller footprint. */
+  compact?: boolean;
+  /** Controlled open (map menu can reopen). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 const W3 = 320;
@@ -371,17 +376,30 @@ export default function RoadLoupe3D({
   corridor,
   s_m,
   className = "",
+  compact = false,
+  open: openProp,
+  onOpenChange,
 }: RoadLoupe3DProps) {
   const canvas3Ref = useRef<HTMLCanvasElement | null>(null);
   const canvasSideRef = useRef<HTMLCanvasElement | null>(null);
-  const [open, setOpen] = useState(true);
+  const [openInternal, setOpenInternal] = useState(true);
   const [windowM, setWindowM] = useState<LoupeWindowM>(50);
   const [hydrated, setHydrated] = useState(false);
 
+  const controlled = openProp !== undefined;
+  const open = controlled ? !!openProp : openInternal;
+  const setOpen = (next: boolean) => {
+    if (!controlled) setOpenInternal(next);
+    onOpenChange?.(next);
+  };
+
   useEffect(() => {
-    setOpen(readOpen());
+    const stored = readOpen();
+    setOpenInternal(stored);
+    if (!controlled) onOpenChange?.(stored);
     setWindowM(readWindowM());
     setHydrated(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate once
   }, []);
 
   useEffect(() => {
@@ -402,9 +420,16 @@ export default function RoadLoupe3D({
     }
   }, [windowM, hydrated]);
 
-  const hasElev =
-    !!corridor.elevations_m?.length &&
-    corridor.elevations_m.length === corridor.S.length;
+  const hasElev = useMemo(() => {
+    const elev = corridor.elevations_m;
+    const n = Math.min(
+      corridor.S.length,
+      corridor.geometry.length,
+      elev?.length ?? 0,
+      corridor.alpha?.length ?? 0
+    );
+    return n >= 2;
+  }, [corridor]);
 
   const model = useMemo(() => {
     if (!hasElev || !open) return null;
@@ -446,7 +471,7 @@ export default function RoadLoupe3D({
         className={`flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5 ${className}`}
       >
         <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-          Loupe 3D · fermée
+          Loupe route · vue 3D + pente · fermée
         </p>
         <button
           type="button"
@@ -471,14 +496,17 @@ export default function RoadLoupe3D({
 
   const turn = model.next_turn;
   const R = model.R_m;
+  const cssH3 = compact ? 110 : H3;
+  const cssHS = compact ? 90 : HS;
 
   return (
     <div
       className={`overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm ${className}`}
+      data-testid="road-loupe-3d"
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-2 py-1">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">
-          Loupe 3D · s = {(s_m / 1000).toFixed(2)} km
+          Loupe route · s = {(s_m / 1000).toFixed(2)} km
         </p>
         <div className="flex flex-wrap items-center gap-1.5">
           <div
@@ -512,21 +540,33 @@ export default function RoadLoupe3D({
         </div>
       </div>
 
-      <div className="grid gap-1 p-1 sm:grid-cols-2">
-        <canvas
-          ref={canvas3Ref}
-          style={{ width: W3, height: H3, maxWidth: "100%" }}
-          className="block w-full rounded border border-slate-100 bg-slate-50"
-          role="img"
-          aria-label={`Vue 3D locale ±${windowM} m`}
-        />
-        <canvas
-          ref={canvasSideRef}
-          style={{ width: WS, height: HS, maxWidth: "100%" }}
-          className="block w-full rounded border border-slate-100 bg-slate-50"
-          role="img"
-          aria-label={`Vue latérale pente ±${windowM} m avec repère R5`}
-        />
+      <div
+        className={`grid gap-1 p-1 ${compact ? "grid-cols-1" : "sm:grid-cols-2"}`}
+      >
+        <div className="min-w-0">
+          <p className="mb-0.5 px-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+            Vue 3D
+          </p>
+          <canvas
+            ref={canvas3Ref}
+            style={{ width: W3, height: cssH3, maxWidth: "100%" }}
+            className="block w-full rounded border border-slate-100 bg-slate-50"
+            role="img"
+            aria-label={`Vue 3D locale ±${windowM} m`}
+          />
+        </div>
+        <div className="min-w-0">
+          <p className="mb-0.5 px-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+            Vue pente
+          </p>
+          <canvas
+            ref={canvasSideRef}
+            style={{ width: WS, height: cssHS, maxWidth: "100%" }}
+            className="block w-full rounded border border-slate-100 bg-slate-50"
+            role="img"
+            aria-label={`Vue latérale pente ±${windowM} m avec repère R5`}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 border-t border-slate-100 px-2 py-1.5 text-[10px] tabular-nums text-slate-600 sm:grid-cols-5">

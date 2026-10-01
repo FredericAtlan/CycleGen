@@ -25,6 +25,10 @@ type MapCameraControlsProps = {
   speedLayers?: MapSpeedLayers;
   onSpeedLayersChange?: (layers: MapSpeedLayers) => void;
   hasCorridorSpeeds?: boolean;
+  /** Loupe 3D + vue pente under the map. */
+  hasLoupe?: boolean;
+  loupeOpen?: boolean;
+  onLoupeOpenChange?: (open: boolean) => void;
 };
 
 export default function MapCameraControls({
@@ -44,6 +48,9 @@ export default function MapCameraControls({
   speedLayers,
   onSpeedLayersChange,
   hasCorridorSpeeds = false,
+  hasLoupe = false,
+  loupeOpen = false,
+  onLoupeOpenChange,
 }: MapCameraControlsProps) {
   const [open, setOpen] = useState(false);
 
@@ -55,6 +62,7 @@ export default function MapCameraControls({
   if (speedLayers?.curve) activeHints.push("Virage");
   if (syncEnabled) activeHints.push("Sync");
   if (hasRange) activeHints.push("Sélection");
+  if (hasLoupe && loupeOpen) activeHints.push("Loupe");
 
   return (
     <div className="pointer-events-auto absolute right-3 top-3 z-[1000] flex max-w-[200px] flex-col items-end gap-1">
@@ -161,6 +169,23 @@ export default function MapCameraControls({
               className="h-3.5 w-3.5 accent-brand"
             />
           </label>
+
+          {hasLoupe && onLoupeOpenChange && (
+            <label
+              className="flex cursor-pointer items-center justify-between gap-2 rounded-md border border-slate-200 bg-white/95 px-2 py-1.5 shadow-sm"
+              title="Vue 3D de la route + profil de pente sous la carte"
+            >
+              <span className="text-[10px] font-semibold text-slate-700">
+                Loupe 3D / pente
+              </span>
+              <input
+                type="checkbox"
+                checked={loupeOpen}
+                onChange={(e) => onLoupeOpenChange(e.target.checked)}
+                className="h-3.5 w-3.5 accent-brand"
+              />
+            </label>
+          )}
         </div>
       )}
     </div>

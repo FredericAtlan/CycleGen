@@ -482,6 +482,7 @@ export default function CycleGenShell() {
   const [mapSpeedLayers, setMapSpeedLayers] = useState<MapSpeedLayers>(
     () => boot?.mapSpeedLayers ?? DEFAULT_MAP_SPEED_LAYERS
   );
+  const [loupeOpen, setLoupeOpen] = useState(true);
   const focusNonceRef = useRef(0);
   const lastBuiltAYRef = useRef<number | null>(boot?.aY ?? null);
   const lastSlopeAlgoKeyRef = useRef<string>(
@@ -2639,11 +2640,31 @@ export default function CycleGenShell() {
     : replayFollow
       ? playback.s
       : chartCursorS ?? lastLoupeSRef.current;
-  const showRoadLoupe =
-    !!corridor &&
-    !!corridor.elevations_m?.length &&
-    corridor.geometry.length >= 2 &&
-    !profileOnlyMode;
+  const showRoadLoupe = useMemo(() => {
+    if (!corridor || profileOnlyMode) return false;
+    const elev = corridor.elevations_m;
+    const n = Math.min(
+      corridor.S.length,
+      corridor.geometry.length,
+      elev?.length ?? 0,
+      corridor.alpha?.length ?? 0
+    );
+    return n >= 2;
+  }, [corridor, profileOnlyMode]);
+
+  // Force-open loupe when a corridor with elevation first becomes available.
+  const loupeWasAvailable = useRef(false);
+  useEffect(() => {
+    if (showRoadLoupe && !loupeWasAvailable.current) {
+      setLoupeOpen(true);
+      try {
+        localStorage.setItem("cyclegen.loupe.open", "1");
+      } catch {
+        /* ignore */
+      }
+    }
+    loupeWasAvailable.current = showRoadLoupe;
+  }, [showRoadLoupe]);
 
   // Sans GPS : rester sur Cycle — pas de pipeline trajet / corridor / sim.
   useEffect(() => {
@@ -3229,8 +3250,14 @@ export default function CycleGenShell() {
           <PlaybackBar playback={playback} />
         )}
         {showRoadLoupe && corridor && (
-          <div className="shrink-0 border-t border-slate-200 bg-white p-1.5">
-            <RoadLoupe3D corridor={corridor} s_m={loupeS} />
+          <div className="max-h-[45%] shrink-0 overflow-y-auto border-t border-slate-200 bg-white p-1.5">
+            <RoadLoupe3D
+              corridor={corridor}
+              s_m={loupeS}
+              compact={mapRightLayout}
+              open={loupeOpen}
+              onOpenChange={setLoupeOpen}
+            />
           </div>
         )}
         {profileOnlyMode && (
@@ -3286,6 +3313,9 @@ export default function CycleGenShell() {
           hasCorridorSpeeds={
             !!corridor?.V_limite?.length && corridor.V_limite.length > 1
           }
+          hasLoupe={showRoadLoupe}
+          loupeOpen={loupeOpen}
+          onLoupeOpenChange={setLoupeOpen}
         />
         )}
         {(() => {
