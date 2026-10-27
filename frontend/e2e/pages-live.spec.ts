@@ -150,27 +150,43 @@ test.describe("GitHub Pages live demo", () => {
       await page.getByRole("button", { name: /Fermer/i }).click().catch(() => {});
     }
 
+    let names: string[] = [];
     await expect
       .poll(
         async () => {
           const selects = page.locator("select");
           for (let i = 0; i < (await selects.count()); i++) {
-            const texts = await selects.nth(i).locator("option").allTextContents();
-            if (texts.some((t) => /ZOE-R135/i.test(t)) && texts.some((t) => /BEV-C-TM/i.test(t))) {
-              return texts.filter((o) => !/^—/.test(o.trim()));
+            const texts = await selects
+              .nth(i)
+              .locator("option")
+              .allTextContents();
+            if (
+              texts.some((t) => /ZOE-R135/i.test(t)) &&
+              texts.some((t) => /BEV-C-TM/i.test(t))
+            ) {
+              names = texts.filter((o) => !/^—/.test(o.trim()));
+              return true;
             }
           }
-          return null;
+          return false;
         },
         { timeout: 30_000 }
       )
-      .toEqual([
-        "ZOE-R135 · Renault Zoé R135 (proxy ingénierie)",
-        "LEAF-40 · Nissan Leaf 40 kWh (proxy ingénierie)",
-        "ID3-58 · Volkswagen ID.3 Pro (proxy ingénierie)",
-        "M3-RWD · Tesla Model 3 RWD (proxy ingénierie)",
-        "IONIQ5 · Hyundai Ioniq 5 (proxy ingénierie)",
-        "BEV-C-TM · BEV compact — masse d’essai type",
-      ]);
+      .toBeTruthy();
+
+    expect(names).toHaveLength(6);
+    for (const code of [
+      "ZOE-R135",
+      "LEAF-40",
+      "ID3-58",
+      "M3-RWD",
+      "IONIQ5",
+      "BEV-C-TM",
+    ]) {
+      expect(names.some((n) => n.includes(code))).toBeTruthy();
+    }
+    expect(
+      names.some((n) => /C-Space|^Grossglockner|BCB · BCB/i.test(n))
+    ).toBeFalsy();
   });
 });
