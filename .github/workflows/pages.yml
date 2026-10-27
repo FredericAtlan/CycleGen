@@ -1,0 +1,80 @@
+# Deploy static frontend to GitHub Pages.
+# Repo Settings → Pages → Source: GitHub Actions (one-time manual).
+# Optional Variables (Settings → Secrets and variables → Actions → Variables):
+#   NEXT_PUBLIC_API_URL   https://….onrender.com  (no trailing slash)
+#   NEXT_PUBLIC_WS_URL    wss://….onrender.com
+#   NEXT_PUBLIC_BASE_PATH /CycleGen   (default if unset)
+
+name: pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, staging]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/pages.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install & static export
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_WS_URL: ${{ vars.NEXT_PUBLIC_WS_URL }}
+          NEXT_PUBLIC_BASE_PATH: ${{ vars.NEXT_PUBLIC_BASE_PATH }}
+        run: |
+          export NEXT_PUBLIC_BASE_PATH="${NEXT_PUBLIC_BASE_PATH:-/CycleGen}"
+          if [ -z "$NEXT_PUBLIC_API_URL" ]; then
+            echo "::warning::NEXT_PUBLIC_API_URL unset — Pages UI will deploy; set the variable when the API is live"
+          fi
+          if [ -z "$NEXT_PUBLIC_WS_URL" ] && [ -n "$NEXT_PUBLIC_API_URL" ]; then
+            # Derive wss:// from https:// API origin when only HTTP URL is set
+            case "$NEXT_PUBLIC_API_URL" in
+              https://*) export NEXT_PUBLIC_WS_URL="wss://${NEXT_PUBLIC_API_URL#https://}" ;;
+              http://*)  export NEXT_PUBLIC_WS_URL="ws://${NEXT_PUBLIC_API_URL#http://}" ;;
+            esac
+          fi
+          echo "BASE_PATH=$NEXT_PUBLIC_BASE_PATH"
+          echo "API_URL=${NEXT_PUBLIC_API_URL:-<unset>}"
+          echo "WS_URL=${NEXT_PUBLIC_WS_URL:-<unset>}"
+          npm ci
+          npm run build:static
+          test -f out/index.html
+          test -f out/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

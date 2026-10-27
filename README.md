@@ -4,6 +4,15 @@ Application web d'ingénierie pour générer des **cycles de roulage automobiles
 
 Pipeline : **Mapbox driving-traffic (fallback OSRM) → Overpass (feux / bridge / tunnel / highway) → elevation filtrée → corridor \(V_{legal}, V_{traffic}, V_{curve}, V_{envelope}\) → IDM + Markov asymétrique (SUMO optionnel) → export CSV/XML**.
 
+## Déploiement (Pages + Render/Railway)
+
+Préparation **sans déploiement automatique** :
+
+→ [`docs/DEPLOY.md`](docs/DEPLOY.md)
+
+- Front statique : `cd frontend && npm run build:static` → `frontend/out/`
+- API : `backend/Dockerfile` (écoute `$PORT`)
+
 ## Documentation scientifique
 
 Base détaillée (experts + ingénieurs hors domaine) pour le volet d’aide latéral :
