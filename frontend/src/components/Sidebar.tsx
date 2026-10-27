@@ -510,9 +510,10 @@ export default function Sidebar({
                       Routeurs (multi)
                     </span>
                     <span className="text-[10px] text-slate-400">
-                      {routerAvailability?.here === false
-                        ? "OSRM (démo)"
-                        : "HERE + secours"}
+                    {routerAvailability?.here === false &&
+                    routerAvailability?.mapbox === false
+                      ? "OSRM (démo)"
+                      : "HERE + Mapbox + OSRM"}
                     </span>
                   </div>
                   <ul className="flex flex-col gap-1 rounded-md border border-slate-200 bg-slate-50/80 p-2">
@@ -539,11 +540,11 @@ export default function Sidebar({
                           : configuredKnown && !configured
                             ? {
                                 label:
-                                  key === "here"
+                                  key === "here" || key === "mapbox"
                                     ? "indisponible"
                                     : "clé absente",
                                 cls:
-                                  key === "here"
+                                  key === "here" || key === "mapbox"
                                     ? "bg-slate-400/15 text-slate-500"
                                     : "bg-amber-500/10 text-amber-700",
                               }
@@ -588,9 +589,10 @@ export default function Sidebar({
                     )}
                   </ul>
                   <p className="text-[10px] leading-snug text-slate-500">
-                    {routerAvailability?.here === false
-                      ? "Démo GitHub Pages : HERE désactivé (pas de clé). Routeur actif : OSRM. Pour HERE/ADAS, déployer l’API avec une clé."
-                      : "Par défaut : HERE uniquement. Si HERE échoue → Mapbox → OSRM. Cocher plusieurs routeurs active le multi-compare (projection nearest-S) dans Contraintes."}
+                    {routerAvailability?.here === false &&
+                    routerAvailability?.mapbox === false
+                      ? "Démo live : HERE et Mapbox grisés (pas d’appel à vos clés). Routeur actif : OSRM. En local / avec API, les trois routeurs restent dans le code."
+                      : "Par défaut : HERE. Secours Mapbox → OSRM. Cocher plusieurs routeurs active le multi-compare (projection nearest-S) dans Contraintes."}
                   </p>
                 </div>
 
