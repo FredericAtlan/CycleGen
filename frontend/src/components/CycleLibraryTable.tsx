@@ -213,6 +213,9 @@ export default function CycleLibraryTable() {
         setCorpusLoading(false);
       }
     })();
+    const onLib = () => setTick((t) => t + 1);
+    window.addEventListener("cyclegen:library-changed", onLib);
+    return () => window.removeEventListener("cyclegen:library-changed", onLib);
   }, []);
 
   const rows = useMemo(() => {

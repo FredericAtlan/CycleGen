@@ -411,8 +411,35 @@ function readAll(): SavedCycle[] {
 }
 
 function writeAll(cycles: SavedCycle[]): void {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cycles));
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cycles));
+  } catch (e) {
+    const name = e instanceof DOMException ? e.name : "";
+    if (
+      name === "QuotaExceededError" ||
+      name === "NS_ERROR_DOM_QUOTA_REACHED"
+    ) {
+      throw new Error(
+        "Quota localStorage dépassée — impossible d’enregistrer la bibliothèque."
+      );
+    }
+    throw e;
+  }
 }
+
+/** Notify UI (bannières / tables) after library mutation. */
+export function notifyLibraryChanged(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event("cyclegen:library-changed"));
+}
+
+/** Ids proposés sur la démo Pages (hors ligne). */
+export const ALPINE_DEMO_CYCLE_IDS = [
+  "rs_avl_grossglockner_prudent",
+  "rs_fit_stelvio_prudent",
+  "rs_fit_iseran_prudent",
+  "rs_fit_veleta_prudent",
+] as const;
 
 /** Downloadable backup of the full saved-cycle library. */
 export function exportSavedCyclesJson(): string {
@@ -464,6 +491,7 @@ export function importSavedCyclesJson(raw: string): {
     .sort((a, b) => (b.savedAt || "").localeCompare(a.savedAt || ""))
     .slice(0, 30);
   writeAll(next);
+  notifyLibraryChanged();
   return { imported, total: next.length };
 }
 
@@ -549,16 +577,91 @@ export async function ensureXspaceAvlSeedCycles(): Promise<{
 }
 
 const RS_FIT_PACK_FLAG = "cyclegen.routeStudioFitPack.v1";
+const RS_ALPINE_DEMO_FLAG = "cyclegen.alpineDemoPack.v1";
+
+type FitPackJson = {
+  cycles?: unknown[];
+  drivers?: unknown;
+};
+
+async function fetchRouteStudioFitPack(): Promise<FitPackJson | null> {
+  const { withBase } = await import("@/lib/basePath");
+  const res = await fetch(withBase("/data/route_studio_fit_pack.json"), {
+    cache: "no-cache",
+  });
+  if (!res.ok) return null;
+  return (await res.json()) as FitPackJson;
+}
+
+function importCyclesSubset(
+  pack: FitPackJson,
+  ids: readonly string[]
+): { imported: number; total: number } {
+  const want = new Set(ids);
+  const cycles = (pack.cycles ?? []).filter(
+    (c) =>
+      c &&
+      typeof c === "object" &&
+      want.has(String((c as { id?: unknown }).id ?? ""))
+  );
+  return importSavedCyclesJson(JSON.stringify({ cycles }));
+}
+
+/**
+ * Démo Pages : 4 cols alpins (~0,5 Mo) — prioritaire si le pack complet
+ * dépasse le quota localStorage.
+ */
+export async function ensureAlpineDemoPack(): Promise<{
+  imported: number;
+  total: number;
+  skipped: boolean;
+  error?: string;
+}> {
+  if (typeof window === "undefined") {
+    return { imported: 0, total: 0, skipped: true };
+  }
+  const existing = new Set(readAll().map((c) => c.id));
+  const missing = ALPINE_DEMO_CYCLE_IDS.filter((id) => !existing.has(id));
+  if (!missing.length && localStorage.getItem(RS_ALPINE_DEMO_FLAG) === "1") {
+    return { imported: 0, total: readAll().length, skipped: true };
+  }
+  try {
+    const pack = await fetchRouteStudioFitPack();
+    if (!pack) {
+      return {
+        imported: 0,
+        total: readAll().length,
+        skipped: true,
+        error: "Pack alpine introuvable (fichier /data).",
+      };
+    }
+    const { imported, total } = importCyclesSubset(pack, ALPINE_DEMO_CYCLE_IDS);
+    if (imported > 0) {
+      localStorage.setItem(RS_ALPINE_DEMO_FLAG, "1");
+      notifyLibraryChanged();
+    }
+    return { imported, total, skipped: false };
+  } catch (e) {
+    return {
+      imported: 0,
+      total: readAll().length,
+      skipped: true,
+      error: e instanceof Error ? e.message : "Échec seed alpine",
+    };
+  }
+}
 
 /**
  * Fetch /data/route_studio_fit_pack.json and merge cycles + drivers.
  * Idempotent via flag when all expected fit cycle ids are present.
+ * Falls back to alpine demo subset on quota errors.
  */
 export async function ensureRouteStudioFitPack(): Promise<{
   imported: number;
   drivers: number;
   total: number;
   skipped: boolean;
+  error?: string;
 }> {
   if (typeof window === "undefined") {
     return { imported: 0, drivers: 0, total: 0, skipped: true };
@@ -591,42 +694,57 @@ export async function ensureRouteStudioFitPack(): Promise<{
     };
   }
   try {
-    const { withBase } = await import("@/lib/basePath");
-    const res = await fetch(withBase("/data/route_studio_fit_pack.json"), {
-      cache: "no-cache",
-    });
-    if (!res.ok) {
+    const pack = await fetchRouteStudioFitPack();
+    if (!pack) {
+      const alpine = await ensureAlpineDemoPack();
       return {
-        imported: 0,
+        imported: alpine.imported,
         drivers: 0,
-        total: readAll().length,
-        skipped: true,
+        total: alpine.total,
+        skipped: alpine.skipped,
+        error: alpine.error,
       };
     }
-    const pack = (await res.json()) as {
-      cycles?: unknown;
-      drivers?: unknown;
-    };
-    const { imported, total } = importSavedCyclesJson(
-      JSON.stringify({ cycles: pack.cycles ?? [] })
-    );
-    let drivers = 0;
     try {
-      const { upsertDriversFromPack } = await import("@/lib/driverLibrary");
-      drivers = upsertDriversFromPack(pack);
-    } catch {
-      /* optional */
+      const { imported, total } = importSavedCyclesJson(
+        JSON.stringify({ cycles: pack.cycles ?? [] })
+      );
+      let drivers = 0;
+      try {
+        const { upsertDriversFromPack } = await import("@/lib/driverLibrary");
+        drivers = upsertDriversFromPack(pack);
+      } catch {
+        /* optional */
+      }
+      if (imported > 0 || drivers > 0) {
+        localStorage.setItem(RS_FIT_PACK_FLAG, "1");
+        localStorage.setItem(RS_ALPINE_DEMO_FLAG, "1");
+        notifyLibraryChanged();
+      }
+      return { imported, drivers, total, skipped: false };
+    } catch (e) {
+      // Quota or parse — try slim alpine set
+      const alpine = await ensureAlpineDemoPack();
+      return {
+        imported: alpine.imported,
+        drivers: 0,
+        total: alpine.total,
+        skipped: alpine.skipped,
+        error:
+          alpine.error ||
+          (e instanceof Error ? e.message : "Import pack incomplet"),
+      };
     }
-    if (imported > 0 || drivers > 0) {
-      localStorage.setItem(RS_FIT_PACK_FLAG, "1");
-    }
-    return { imported, drivers, total, skipped: false };
-  } catch {
+  } catch (e) {
+    const alpine = await ensureAlpineDemoPack();
     return {
-      imported: 0,
+      imported: alpine.imported,
       drivers: 0,
-      total: readAll().length,
-      skipped: true,
+      total: alpine.total,
+      skipped: alpine.skipped,
+      error:
+        alpine.error ||
+        (e instanceof Error ? e.message : "Échec seed bibliothèque"),
     };
   }
 }
