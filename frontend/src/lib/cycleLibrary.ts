@@ -1,11 +1,12 @@
 /** Local library of saved driving cycles (profiles + traceability metadata). */
 
+import { withBase } from "./basePath";
 import type { EnvelopeMask } from "./corridorEdit";
 import { DEFAULT_ENVELOPE_MASK } from "./corridorEdit";
 import type { DriverPhysics } from "./driverPresets";
 import { DEFAULT_A_Y, presetFor } from "./driverPresets";
 import type { DriverZone } from "./driverZones";
-import { RENAULT_GROSSGLOCKNER_ZONES } from "./driverZones";
+import { GROSSGLOCKNER_DEFAULT_ZONES } from "./driverZones";
 import type { SlopeAlgoOptions } from "./slopeAlgo";
 import { DEFAULT_SLOPE_ALGO, normalizeSlopeAlgo } from "./slopeAlgo";
 import type { LegalFilterOptions } from "./legalFilter";
@@ -14,11 +15,12 @@ import type {
   ConsolidatedProfile,
   DriverProfile,
   LatLon,
-  RoutingProfile,
+  RouteAnalyzeResponse,
   SimEngine,
   SpatialCorridor,
   WaypointDraft,
 } from "./types";
+import { normalizeRoutingProfile } from "./types";
 import {
   computeCycleStats,
   downsampleGeometry,
@@ -467,13 +469,52 @@ export function importSavedCyclesJson(raw: string): {
   return { imported, total: next.length };
 }
 
-const XSPACE_SEED_FLAG = "cyclegen.xspaceAvlSeed.v1";
+const AVL_RS_SEED_FLAG = "cyclegen.avlRsSeed.v1";
+const XSPACE_LABEL_SCRUB_FLAG = "cyclegen.scrubXspaceLabels.v1";
+
+/** Strip legacy OEM brand « XSPACE » from cycle names already in localStorage. */
+function scrubXspaceLabelsInSavedCycles(): number {
+  if (typeof window === "undefined") return 0;
+  if (localStorage.getItem(XSPACE_LABEL_SCRUB_FLAG) === "1") return 0;
+  const all = readAll();
+  let n = 0;
+  const next = all.map((c) => {
+    const name0 = c.name || "";
+    const source0 = c.source || "";
+    let name = name0
+      .replace(/\s*[·\-]\s*XSPACE\b/gi, "")
+      .replace(/\bXSPACE[_\s-]*/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    let source = source0
+      .replace(/\bAVL\s*XSPACE\b/gi, "Route Studio")
+      .replace(/\bXSPACE\b/gi, "Grossglockner")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    // Empty name after strip (was only "XSPACE") → Grossglockner
+    if (!name && /xspace/i.test(name0)) name = "Grossglockner";
+    if (name !== name0 || source !== source0) {
+      n += 1;
+      return { ...c, name: name || name0, source: source || source0 };
+    }
+    return c;
+  });
+  if (n > 0) writeAll(next);
+  localStorage.setItem(XSPACE_LABEL_SCRUB_FLAG, "1");
+  // Drop obsolete seed flag so avl_rs pack can load beside old xspace ids
+  try {
+    localStorage.removeItem("cyclegen.xspaceAvlSeed.v1");
+  } catch {
+    /* ignore */
+  }
+  return n;
+}
 
 /**
- * Fetch /data/xspace_avl_seed_cycles.json once and merge into the local library.
- * Idempotent — skips if flag set and all 6 ids already present.
+ * Fetch /data/avl_rs_seed_cycles.json once and merge into the local library.
+ * Idempotent — skips if flag set and all expected ids already present.
  */
-export async function ensureXspaceAvlSeedCycles(): Promise<{
+export async function ensureAvlRsSeedCycles(): Promise<{
   imported: number;
   total: number;
   skipped: boolean;
@@ -481,21 +522,20 @@ export async function ensureXspaceAvlSeedCycles(): Promise<{
   if (typeof window === "undefined") {
     return { imported: 0, total: 0, skipped: true };
   }
+  scrubXspaceLabelsInSavedCycles();
   const expected = [
-    "xspace_avl_iseran_prudent",
-    "xspace_avl_iseran_dynamique",
-    "xspace_avl_veleta_prudent",
-    "xspace_avl_veleta_dynamique",
-    "xspace_avl_stelvio_prudent",
-    "xspace_avl_stelvio_dynamique",
+    "avl_rs_iseran_prudent",
+    "avl_rs_iseran_dynamique",
+    "avl_rs_stelvio_prudent",
+    "avl_rs_stelvio_dynamique",
   ];
   const existing = new Set(readAll().map((c) => c.id));
   const missing = expected.filter((id) => !existing.has(id));
-  if (!missing.length && localStorage.getItem(XSPACE_SEED_FLAG) === "1") {
+  if (!missing.length && localStorage.getItem(AVL_RS_SEED_FLAG) === "1") {
     return { imported: 0, total: readAll().length, skipped: true };
   }
   try {
-    const res = await fetch("/data/xspace_avl_seed_cycles.json", {
+    const res = await fetch(withBase("/data/avl_rs_seed_cycles.json"), {
       cache: "no-cache",
     });
     if (!res.ok) {
@@ -504,7 +544,7 @@ export async function ensureXspaceAvlSeedCycles(): Promise<{
     const text = await res.text();
     const { imported, total } = importSavedCyclesJson(text);
     if (imported > 0) {
-      localStorage.setItem(XSPACE_SEED_FLAG, "1");
+      localStorage.setItem(AVL_RS_SEED_FLAG, "1");
     }
     return { imported, total, skipped: false };
   } catch {
@@ -542,7 +582,7 @@ export async function ensureRouteStudioFitPack(): Promise<{
     "rs_here_grossglockner_prudent",
     "rs_here_grossglockner_dynamique",
     "rs_here_grossglockner_prea",
-    "xspace_prea_grossglockner_ref",
+    "rs_prea_grossglockner_ref",
   ];
   const existing = new Set(readAll().map((c) => c.id));
   const missing = expected.filter((id) => !existing.has(id));
@@ -555,7 +595,7 @@ export async function ensureRouteStudioFitPack(): Promise<{
     };
   }
   try {
-    const res = await fetch("/data/route_studio_fit_pack.json", {
+    const res = await fetch(withBase("/data/route_studio_fit_pack.json"), {
       cache: "no-cache",
     });
     if (!res.ok) {
@@ -569,6 +609,7 @@ export async function ensureRouteStudioFitPack(): Promise<{
     const pack = (await res.json()) as {
       cycles?: unknown;
       drivers?: unknown;
+      summary?: unknown;
     };
     const { imported, total } = importSavedCyclesJson(
       JSON.stringify({ cycles: pack.cycles ?? [] })
@@ -582,6 +623,16 @@ export async function ensureRouteStudioFitPack(): Promise<{
     }
     if (imported > 0 || drivers > 0) {
       localStorage.setItem(RS_FIT_PACK_FLAG, "1");
+    }
+    if (pack.summary && typeof pack.summary === "object") {
+      try {
+        localStorage.setItem(
+          "cyclegen.rs_fit_pack.summary.v1",
+          JSON.stringify(pack.summary)
+        );
+      } catch {
+        /* quota */
+      }
     }
     return { imported, drivers, total, skipped: false };
   } catch {
@@ -803,15 +854,19 @@ export function peekStashedCompareCycles(): SavedCycle[] {
   }
 }
 
+export function clearStashedCompareCycles(): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.removeItem(COMPARE_STASH_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Consume stash (legacy). Prefer peek + clear after Versus state commits. */
 export function takeStashedCompareCycles(): SavedCycle[] {
   const cycles = peekStashedCompareCycles();
-  if (typeof window !== "undefined") {
-    try {
-      sessionStorage.removeItem(COMPARE_STASH_KEY);
-    } catch {
-      /* ignore */
-    }
-  }
+  clearStashedCompareCycles();
   return cycles;
 }
 
@@ -1263,6 +1318,134 @@ function profileFromSavedCycle(base: SavedCycle, hasGeo: boolean): ConsolidatedP
 }
 
 /**
+ * Backfill elevations from α·Δs when a saved slim corridor lost Z
+ * (needed for Loupe 3D / vue pente).
+ */
+export function ensureCorridorElevations(
+  corridor: SpatialCorridor
+): SpatialCorridor {
+  const n = corridor.S.length;
+  if (n < 2) return corridor;
+  const elev = corridor.elevations_m;
+  if (elev && elev.length >= n) {
+    const finite = elev
+      .slice(0, n)
+      .filter((z) => Number.isFinite(z)).length;
+    if (finite >= 2) return corridor;
+  }
+  const alpha = corridor.alpha ?? [];
+  const z: number[] = [0];
+  for (let i = 1; i < n; i++) {
+    const ds = Math.max(0, corridor.S[i] - corridor.S[i - 1]);
+    const a = Number.isFinite(alpha[i - 1])
+      ? alpha[i - 1]
+      : Number.isFinite(alpha[i])
+        ? alpha[i]
+        : 0;
+    z.push(z[i - 1] + Math.tan(a) * ds);
+  }
+  return { ...corridor, elevations_m: z };
+}
+
+/** Synthetic RouteAnalyzeResponse so ConstraintWorkspace mounts after biblio restore. */
+export function routeAnalyzeFromCorridor(
+  corridor: SpatialCorridor,
+  opts?: {
+    origin?: LatLon | null;
+    destination?: LatLon | null;
+    distance_m?: number | null;
+    duration_s?: number | null;
+    traffic_source?: string | null;
+    a_y_mps2?: number | null;
+    warnings?: SpatialCorridor["warnings"];
+  }
+): RouteAnalyzeResponse {
+  const geo =
+    corridor.geometry?.length >= 2
+      ? corridor.geometry
+      : ([
+          opts?.origin,
+          opts?.destination,
+        ].filter(Boolean) as LatLon[]);
+  const S = corridor.S;
+  const n = S.length;
+  const segment_distances_m: number[] = [];
+  const segment_speeds_mps: number[] = [];
+  for (let i = 1; i < n; i++) {
+    segment_distances_m.push(Math.max(0, S[i] - S[i - 1]));
+    const vLim = corridor.V_limite?.[i] ?? corridor.V_limite?.[i - 1] ?? 0;
+    segment_speeds_mps.push(Number.isFinite(vLim) ? Math.max(0, vLim) : 0);
+  }
+  const elev = corridor.elevations_m?.slice(0, n) ?? [];
+  const elevations_m =
+    elev.length === n ? elev : Array.from({ length: n }, () => 0);
+
+  let minLat = Infinity,
+    maxLat = -Infinity,
+    minLon = Infinity,
+    maxLon = -Infinity;
+  for (const p of geo) {
+    if (!p) continue;
+    minLat = Math.min(minLat, p.lat);
+    maxLat = Math.max(maxLat, p.lat);
+    minLon = Math.min(minLon, p.lon);
+    maxLon = Math.max(maxLon, p.lon);
+  }
+  if (!Number.isFinite(minLat)) {
+    minLat = 0;
+    maxLat = 0;
+    minLon = 0;
+    maxLon = 0;
+  }
+
+  const traffic_signals = (corridor.S_feux ?? [])
+    .map((s) => {
+      if (!geo.length) return null;
+      let best = 0;
+      let bestD = Infinity;
+      for (let i = 0; i < S.length; i++) {
+        const d = Math.abs(S[i] - s);
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+      }
+      const g = geo[Math.min(best, geo.length - 1)];
+      return g ? { lat: g.lat, lon: g.lon } : null;
+    })
+    .filter((x): x is { lat: number; lon: number } => !!x);
+
+  const distance_m =
+    opts?.distance_m != null && Number.isFinite(opts.distance_m)
+      ? opts.distance_m
+      : S.length
+        ? S[S.length - 1] - S[0]
+        : 0;
+
+  return {
+    geometry: geo,
+    distance_m,
+    duration_s:
+      opts?.duration_s != null && Number.isFinite(opts.duration_s)
+        ? opts.duration_s
+        : 0,
+    segment_speeds_mps,
+    segment_distances_m,
+    elevations_m,
+    traffic_signals,
+    bbox: [minLon, minLat, maxLon, maxLat],
+    origin: opts?.origin ?? geo[0] ?? null,
+    destination: opts?.destination ?? geo[geo.length - 1] ?? null,
+    traffic_source: opts?.traffic_source ?? corridor.traffic_source ?? undefined,
+    warnings: opts?.warnings ?? corridor.warnings,
+    a_y_mps2: opts?.a_y_mps2 ?? corridor.a_y_mps2,
+    elevation_source: "corridor_restore",
+    routers_used: ["osrm"],
+    router_status: { osrm: "ok:restored_from_library" },
+  };
+}
+
+/**
  * Write a full Studio session *before* navigating to `/?mode=create`.
  * Ensures the first paint (and Strict Mode remount) boots on the right step
  * instead of Trajet after a one-shot stash was already consumed.
@@ -1284,10 +1467,13 @@ export function seedStudioSessionFromCycle(
   const hasGeo = geo.length >= 2;
   const hasProfile =
     base.time.length > 1 && base.velocity.length === base.time.length;
-  const savedCorridor =
+  const savedCorridorRaw =
     hasGeo && base.corridor && base.corridor.S.length > 1
       ? base.corridor
       : null;
+  const savedCorridor = savedCorridorRaw
+    ? ensureCorridorElevations(savedCorridorRaw)
+    : null;
   const origin = hasGeo ? geo[0] : null;
   const destination = hasGeo ? geo[geo.length - 1] : null;
   const routeParts = (base.meta?.routeLabel || "")
@@ -1298,6 +1484,19 @@ export function seedStudioSessionFromCycle(
   const openAsStudy = intent === "study" && hasProfile;
   const noGpsBase = !hasGeo && hasProfile;
   const fullProfile = hasProfile ? profileFromSavedCycle(base, hasGeo) : null;
+
+  const restoredRoute =
+    savedCorridor && savedCorridor.S.length > 1
+      ? routeAnalyzeFromCorridor(savedCorridor, {
+          origin,
+          destination,
+          distance_m: base.stats.distance_m,
+          duration_s: base.stats.duration_s,
+          traffic_source: meta?.trafficSource ?? savedCorridor.traffic_source,
+          a_y_mps2: typeof meta?.aY === "number" ? meta.aY : savedCorridor.a_y_mps2,
+          warnings: savedCorridor.warnings,
+        })
+      : null;
 
   let activeStep: 1 | 2 | 3 | 4 = 1;
   let maxUnlocked: 1 | 2 | 3 | 4 = 1;
@@ -1310,18 +1509,21 @@ export function seedStudioSessionFromCycle(
     maxUnlocked = 4;
     stage = "completed";
   } else if (hasProfile && fullProfile) {
+    // Keep saved profile as reference overlay; unlock all wizard steps so
+    // Trajet / Contraintes / Conducteur / Cycle are editable then regenerable.
     referenceCycle = {
       name: base.name,
       time: base.time.slice(),
       velocity: base.velocity.slice(),
     };
+    showBaseOverlay = true;
     if (savedCorridor && savedCorridor.S.length > 1) {
-      activeStep = 2;
-      maxUnlocked = 3;
-      stage = "corridor";
+      activeStep = 3;
+      maxUnlocked = 4;
+      stage = "completed";
     } else if (hasGeo) {
       activeStep = 1;
-      maxUnlocked = 1;
+      maxUnlocked = 4;
       stage = "route";
     } else {
       activeStep = 4;
@@ -1330,7 +1532,7 @@ export function seedStudioSessionFromCycle(
     }
   } else if (hasGeo) {
     activeStep = savedCorridor ? 2 : 1;
-    maxUnlocked = savedCorridor ? 2 : 1;
+    maxUnlocked = savedCorridor ? 4 : 2;
     stage = savedCorridor ? "corridor" : "route";
   }
 
@@ -1356,7 +1558,7 @@ export function seedStudioSessionFromCycle(
   const preferredEngine: SimEngine =
     meta?.preferredEngine === "sumo" ? "sumo" : "idm";
   const routingProfile =
-    (meta?.routingProfile as RoutingProfile) || "Mapbox/Traffic";
+    normalizeRoutingProfile(meta?.routingProfile, "HERE/ADAS");
   const envelopeMask: EnvelopeMask = meta?.envelopeMask
     ? {
         legal: !!meta.envelopeMask.legal,
@@ -1383,9 +1585,15 @@ export function seedStudioSessionFromCycle(
 
   const corpusId = base.corpusId || "";
   const defaultVehicle =
-    corpusId.includes("epsim") || corpusId.includes("xspace")
-      ? "renault-xspace-apr2bis"
-      : "renault-cspace-leapfrog-apr2bis";
+    corpusId.includes("avl_rs") ||
+      corpusId.includes("rs_") ||
+      corpusId.includes("alpine") ||
+      corpusId.includes("veleta") ||
+      corpusId.includes("grossglockner") ||
+      corpusId.includes("iseran") ||
+      corpusId.includes("stelvio")
+      ? "plant-rs-apr2bis"
+      : "plant-cspace-leapfrog-apr2bis";
 
   const buildSnap = (profile: ConsolidatedProfile | null): StudioSessionSnapshot => ({
     v: 1,
@@ -1411,7 +1619,7 @@ export function seedStudioSessionFromCycle(
     geometry: hasGeo ? geo : [],
     distanceM: base.stats.distance_m,
     durationS: base.stats.duration_s,
-    routeResult: null,
+    routeResult: restoredRoute,
     corridor: savedCorridor,
     routingProfile,
     departAt:
@@ -1426,15 +1634,28 @@ export function seedStudioSessionFromCycle(
     warnings,
     driverProfile,
     physics,
-    driverZonesEnabled: false,
-    driverZones: [...RENAULT_GROSSGLOCKNER_ZONES],
+    driverId:
+      typeof meta?.driverId === "string" && meta.driverId
+        ? meta.driverId
+        : null,
+    driverZonesEnabled:
+      typeof meta?.driverZonesEnabled === "boolean"
+        ? meta.driverZonesEnabled
+        : false,
+    driverZones:
+      Array.isArray(meta?.driverZones) && meta.driverZones.length
+        ? (meta.driverZones as DriverZone[])
+        : [...GROSSGLOCKNER_DEFAULT_ZONES],
     maxSpeedKmh: meta?.maxSpeedKmh !== undefined ? meta.maxSpeedKmh : null,
     vehicleId:
       typeof meta?.vehicleId === "string" && meta.vehicleId
         ? meta.vehicleId
         : defaultVehicle,
     slopeUnit: "percent",
-    waypoints: [],
+    waypoints:
+      Array.isArray(meta?.waypoints) && meta.waypoints.length
+        ? (meta.waypoints as WaypointDraft[])
+        : [],
     profile,
     appliedParamsKey: null,
     envelopeMask,
@@ -1450,10 +1671,10 @@ export function seedStudioSessionFromCycle(
       : undefined,
     showRouteArrows: true,
     mapSpeedLayers: {
-      envelope: false,
-      legal: false,
-      traffic: false,
-      curve: false,
+      envelope: true,
+      legal: true,
+      traffic: true,
+      curve: true,
     },
     referenceGeometry: hasGeo ? geo : [],
     syncChartMap: true,

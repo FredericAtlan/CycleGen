@@ -16,11 +16,11 @@ import {
   listBenchmarkSources,
 } from "@/lib/api";
 import {
+  clearStashedCompareCycles,
   listSavedCycles,
   newCycleInstanceId,
   packCycle,
   peekStashedCompareCycles,
-  takeStashedCompareCycles,
   type SavedCycle,
 } from "@/lib/cycleLibrary";
 import {
@@ -48,6 +48,7 @@ import MiniRouteMap from "./MiniRouteMap";
 import VersusInspectDrawer, {
   VERSUS_CYCLE_DASH,
 } from "./VersusInspectDrawer";
+import VersusFidelityBand from "./VersusFidelityBand";
 import { buildInspectRunMeta } from "@/lib/inspectRunMeta";
 import {
   INSPECT_SERIES,
@@ -105,6 +106,8 @@ const COMPARE_SERIES_TOGGLES: {
 
 type CompareCycle = SavedCycle & {
   color: string;
+  /** Bibliothèque locale : id stable (≠ id instance Versus). */
+  libraryCycleId: string | null;
   /** Nom affiché dans la légende / graphes (éditable). */
   label: string;
   /** Décalage sur l’axe temps (s). */
@@ -118,10 +121,18 @@ type CompareCycle = SavedCycle & {
 function defaultVehicleIdForCycle(c: SavedCycle): string | null {
   if (c.meta?.vehicleId) return c.meta.vehicleId;
   const hay = `${c.corpusId || ""} ${c.name || ""} ${c.source || ""}`.toLowerCase();
-  if (hay.includes("epsim") || hay.includes("xspace")) {
-    return "renault-xspace-apr2bis";
+  if (
+    hay.includes("avl_rs") ||
+    hay.includes("rs_") ||
+    hay.includes("alpine") ||
+    hay.includes("veleta") ||
+    hay.includes("grossglockner") ||
+    hay.includes("iseran") ||
+    hay.includes("stelvio")
+  ) {
+    return "plant-rs-apr2bis";
   }
-  return "renault-cspace-leapfrog-apr2bis";
+  return "plant-cspace-leapfrog-apr2bis";
 }
 
 function vehicleOf(c: CompareCycle): VehicleCard | null {
@@ -226,10 +237,17 @@ function cycleFromProfile(
     driverProfile?: string;
     trafficSource?: string | null;
     routeLabel?: string;
+    aY?: number;
+    meta?: SavedCycle["meta"];
   }
 ): SavedCycle {
   const corridor = extra?.corridor ?? null;
-  const a_lat = lateralAccelFromCorridor(profile, corridor, 3.5);
+  const aY =
+    extra?.aY ??
+    extra?.meta?.aY ??
+    corridor?.a_y_mps2 ??
+    2.5;
+  const a_lat = lateralAccelFromCorridor(profile, corridor, aY);
   const limits = sampleLimitsAlongProfile(profile, corridor);
   const geometry =
     extra?.geometry && extra.geometry.length >= 2
@@ -250,9 +268,11 @@ function cycleFromProfile(
     geometry,
     limits,
     meta: {
-      driverProfile: extra?.driverProfile,
-      trafficSource: extra?.trafficSource ?? undefined,
-      routeLabel: extra?.routeLabel,
+      ...extra?.meta,
+      driverProfile: extra?.driverProfile ?? extra?.meta?.driverProfile,
+      trafficSource: extra?.trafficSource ?? extra?.meta?.trafficSource,
+      routeLabel: extra?.routeLabel ?? extra?.meta?.routeLabel,
+      aY,
     },
   });
 }
@@ -797,6 +817,7 @@ function AddCycleModal({ open, onClose, onAdd, addedKeys }: AddModalProps) {
       driverProfile: trip.driverProfile,
       trafficSource: trip.trafficSource,
       routeLabel: `${trip.departureLabel} → ${trip.destinationLabel}`,
+      aY: trip.aY,
     });
     onAdd(cycle);
   };
@@ -910,7 +931,7 @@ function AddCycleModal({ open, onClose, onAdd, addedKeys }: AddModalProps) {
                     </li>
                   )}
                   {filteredSaved.map((c) => {
-                    const already = addedKeys.has(c.id);
+                    const already = addedKeys.has(`lib:${c.id}`);
                     return (
                       <li key={c.id}>
                         <button
@@ -1121,8 +1142,6 @@ function CompareTooltip({
   );
 }
 
-let pendingCompareHydrate: SavedCycle[] = [];
-
 export default function CompareStudio() {
   const [cycles, setCycles] = useState<CompareCycle[]>([]);
   const [addOpen, setAddOpen] = useState(false);
@@ -1158,13 +1177,14 @@ export default function CompareStudio() {
   const addedKeys = useMemo(() => {
     const keys = new Set<string>();
     for (const c of cycles) {
-      keys.add(c.id);
       if (c.corpusId) keys.add(`corpus:${c.corpusId}`);
+      if (c.libraryCycleId) keys.add(`lib:${c.libraryCycleId}`);
     }
     return keys;
   }, [cycles]);
 
   const addCycle = useCallback((c: SavedCycle) => {
+    const libraryCycleId = c.corpusId ? null : c.id;
     const instanceId = newCycleInstanceId(c.origin || "vs");
     setCycles((prev) => {
       const sameName = prev.filter(
@@ -1197,6 +1217,7 @@ export default function CompareStudio() {
         {
           ...c,
           id: instanceId,
+          libraryCycleId,
           stats,
           acceleration: enriched.acceleration,
           slope: enriched.slope,
@@ -1216,18 +1237,16 @@ export default function CompareStudio() {
 
   useEffect(() => {
     if (didHydrateRef.current) return;
-    const fromStore = peekStashedCompareCycles();
-    if (fromStore.length) {
-      pendingCompareHydrate = fromStore;
-      takeStashedCompareCycles();
-    }
-    if (!pendingCompareHydrate.length) return;
+    const batch = peekStashedCompareCycles();
+    if (!batch.length) return;
     didHydrateRef.current = true;
-    for (const c of pendingCompareHydrate) addCycle(c);
+    for (const c of batch) addCycle(c);
   }, [addCycle]);
 
   useEffect(() => {
-    if (cycles.length > 0) pendingCompareHydrate = [];
+    if (cycles.length === 0) return;
+    const t = window.setTimeout(() => clearStashedCompareCycles(), 1500);
+    return () => window.clearTimeout(t);
   }, [cycles.length]);
 
   const removeCycle = (id: string) => {
@@ -1624,6 +1643,7 @@ export default function CompareStudio() {
 
   return (
     <div className="flex h-full flex-col bg-slate-50 text-slate-900">
+      <VersusFidelityBand />
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* Colonne gauche — cartes */}
         <aside className="flex min-h-0 w-full flex-col border-b border-slate-200 bg-slate-50 lg:w-[min(42%,440px)] lg:border-b-0 lg:border-r">

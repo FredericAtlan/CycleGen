@@ -33,7 +33,7 @@ export type VehicleCard = {
   r_dyn_m: number;
   /**
    * Max |hydraulic brake torque| at wheels (N·m).
-   * When wheel speed ≈ 0, τ_wheel is set to −τ_brake_max (EP-SIM standstill rule).
+   * When wheel speed ≈ 0, τ_wheel is set to −τ_brake_max (réf. énergie standstill rule).
    */
   tau_brake_max_nm?: number | null;
   v_max_kmh: number | null;
@@ -55,12 +55,12 @@ export type VehicleCard = {
 };
 
 /**
- * Seed catalog: OEM Renault (user) + BEV engineering proxies.
+ * Seed catalog: OEM (user) + BEV engineering proxies.
  * Official CoC F0/F1/F2 are rarely public — proxies are labeled as such.
  */
 const SEED: VehicleCard[] = [
   {
-    id: "renault-cspace-leapfrog-apr2bis",
+    id: "plant-cspace-leapfrog-apr2bis",
     code: "C-SPACE / Leapfrog",
     name: "C-Space / Leapfrog",
     massCode: "TM",
@@ -74,12 +74,12 @@ const SEED: VehicleCard[] = [
     powertrain: "bev",
     milestone: "APR2 bis",
     notes: "Road load constructeur — milestone APR2 bis.",
-    source: "Renault · APR2 bis",
+    source: "OEM · APR2 bis",
   },
   {
-    id: "renault-xspace-apr2bis",
-    code: "XSPACE",
-    name: "XSPACE",
+    id: "plant-rs-apr2bis",
+    code: "RS",
+    name: "Route Studio plant",
     massCode: "TM",
     mass_kg: 2556,
     f0_n: 163.2,
@@ -92,8 +92,8 @@ const SEED: VehicleCard[] = [
     powertrain: "bev",
     milestone: "APR2 bis",
     notes:
-      "Road load constructeur — milestone APR2 bis. r_dyn=0.356 m (EP-SIM Space). τ_brake_max=10 kN·m à roue arrêtée (Grossglockner EP-SIM).",
-    source: "Renault · APR2 bis · EP-SIM Space",
+      "Road load constructeur — milestone APR2 bis. r_dyn=0.356 m (référence énergie). τ_brake_max=10 kN·m à roue arrêtée (Grossglockner réf. énergie).",
+    source: "OEM · APR2 bis · référence énergie",
   },
   {
     id: "seed-bcb",
@@ -124,7 +124,7 @@ const SEED: VehicleCard[] = [
   {
     id: "seed-zoe-bev",
     code: "ZOE-R135",
-    name: "Renault Zoé R135 (proxy ingénierie)",
+    name: "Zoé R135 (proxy ingénierie)",
     massCode: "TM",
     mass_kg: 1575,
     f0_n: 118,
@@ -367,7 +367,7 @@ export function saveVehicle(
 
 export function deleteVehicle(id: string): void {
   // Keep OEM seeds
-  if (SEED.some((s) => s.id === id && s.source?.startsWith("Renault"))) return;
+  if (SEED.some((s) => s.id === id && s.source?.startsWith("OEM"))) return;
   writeAll(readAll().filter((v) => v.id !== id));
 }
 

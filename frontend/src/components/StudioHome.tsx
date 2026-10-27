@@ -29,6 +29,18 @@ const EnergyStudyStudio = dynamic(
   }
 );
 
+const DriverStudio = dynamic(
+  () => import("@/components/driver/DriverStudio"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-1 items-center justify-center text-sm text-slate-400">
+        Ouverture du studio Conducteur…
+      </div>
+    ),
+  }
+);
+
 export default function StudioHome() {
   const params = useSearchParams();
   const mode = params.get("mode");
@@ -40,6 +52,14 @@ export default function StudioHome() {
     setSessionOpen(hasStudioSession());
   }, [mounted, mode]);
 
+  // Legacy bookmark: banc d'essai retiré → Créer (fenêtres historiques)
+  useEffect(() => {
+    if (!mounted || mode !== "ide") return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("mode", "create");
+    window.history.replaceState({}, "", url.toString());
+  }, [mounted, mode]);
+
   if (!mounted) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-slate-400">
@@ -48,7 +68,7 @@ export default function StudioHome() {
     );
   }
 
-  if (mode === "create") {
+  if (mode === "create" || mode === "ide") {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <CycleGenShell />
@@ -83,6 +103,14 @@ export default function StudioHome() {
     );
   }
 
+  if (mode === "driver") {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <DriverStudio />
+      </div>
+    );
+  }
+
   return (
     <div
       data-testid="studio-home"
@@ -97,8 +125,8 @@ export default function StudioHome() {
             CycleGen
           </h1>
           <p className="mt-1.5 text-sm text-slate-500">
-            Deux portes : un trajet GPS, ou une trace (t, v, pente). Bibliothèque
-            et Versus restent dans la barre du haut.
+            Trajet GPS, étude énergie, bibliothèque — ou Conducteur depuis
+            traces (hors définition GPS).
           </p>
         </div>
 
@@ -120,43 +148,62 @@ export default function StudioHome() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Link
+            href="/?mode=driver"
+            className="flex flex-col border border-slate-200 bg-white p-5 transition hover:border-slate-400"
+            data-testid="studio-home-driver"
+          >
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+              Scénario
+            </span>
+            <span className="mt-1 text-sm font-semibold text-slate-900">
+              Conducteur depuis traces
+            </span>
+            <span className="mt-2 text-[13px] leading-snug text-slate-500">
+              Choisir un fichier → identifier → enregistrer le conducteur.
+            </span>
+          </Link>
+          <Link
             href="/?mode=create"
             className="flex flex-col border border-slate-200 bg-white p-5 transition hover:border-slate-400"
           >
             <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-              Porte 1
+              Scénario
             </span>
             <span className="mt-1 text-sm font-semibold text-slate-900">
               Trajet GPS
             </span>
             <span className="mt-2 text-[13px] leading-snug text-slate-500">
-              Adresses → corridor → IDM/SUMO → profil, puis export et Versus.
+              Adresses → corridor → simulation → export.
             </span>
           </Link>
-          <div className="flex flex-col border border-slate-200 bg-white p-5">
-            <Link href="/?mode=energy" className="group flex flex-col">
-              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                Porte 2
-              </span>
-              <span className="mt-1 text-sm font-semibold text-slate-900 group-hover:text-brand">
-                Trace (t, v, pente)
-              </span>
-              <span className="mt-2 text-[13px] leading-snug text-slate-500">
-                Importer un roulage, choisir le véhicule, simuler P et couple.
-              </span>
-            </Link>
-            <div className="mt-4 border-t border-slate-100 pt-3">
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                Preset
-              </p>
-              <Link
-                href="/?mode=energy&corpus=epsim_xspace_grossglockner"
-                className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 hover:border-slate-400 hover:bg-white"
-              >
-                Grossglockner · XSPACE
-              </Link>
-            </div>
-          </div>
+          <Link
+            href="/?mode=energy"
+            className="flex flex-col border border-slate-200 bg-white p-5 transition hover:border-slate-400"
+          >
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+              Scénario
+            </span>
+            <span className="mt-1 text-sm font-semibold text-slate-900">
+              Trace énergie (t, v, pente)
+            </span>
+            <span className="mt-2 text-[13px] leading-snug text-slate-500">
+              Importer un roulage et simuler puissance / couple.
+            </span>
+          </Link>
+          <Link
+            href="/?mode=library"
+            className="flex flex-col border border-slate-200 bg-white p-5 transition hover:border-slate-400"
+          >
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+              Bibliothèque
+            </span>
+            <span className="mt-1 text-sm font-semibold text-slate-900">
+              Cycles enregistrés
+            </span>
+            <span className="mt-2 text-[13px] leading-snug text-slate-500">
+              Revoir, exporter ou comparer des cycles déjà générés.
+            </span>
+          </Link>
         </div>
       </div>
     </div>
