@@ -79,6 +79,10 @@ import {
   MAX_WAYPOINTS,
 } from "@/lib/types";
 import {
+  isHereDisabled,
+  pagesRouterAvailability,
+} from "@/lib/demoFlags";
+import {
   DEFAULT_A_Y,
   DEFAULT_MAX_SPEED_KMH,
   defaultDriverPhysics,
@@ -304,13 +308,21 @@ export default function CycleGenShell() {
     () => boot?.corridor ?? null
   );
   const [routingProfile, setRoutingProfile] = useState<RoutingProfile>(
-    () => (boot?.routingProfile as RoutingProfile) ?? "HERE/ADAS"
+    () => {
+      const bootProfile = boot?.routingProfile as RoutingProfile | undefined;
+      if (bootProfile && !(isHereDisabled() && bootProfile === "HERE/ADAS")) {
+        return bootProfile;
+      }
+      return isHereDisabled() ? "Car/OSRM" : "HERE/ADAS";
+    }
   );
   // Multi-router selection (ordered ; first = primary geometry).
   const [routingProfiles, setRoutingProfiles] = useState<RoutingProfile[]>(
     () => {
       const primary =
-        (boot?.routingProfile as RoutingProfile) ?? "HERE/ADAS";
+        (boot?.routingProfile as RoutingProfile | undefined) ??
+        (isHereDisabled() ? "Car/OSRM" : "HERE/ADAS");
+      if (isHereDisabled() && primary === "HERE/ADAS") return ["Car/OSRM"];
       return [primary];
     }
   );
@@ -1646,8 +1658,13 @@ export default function CycleGenShell() {
   }, []);
 
   const handleApplyHomologationPreset = useCallback(() => {
-    setRoutingProfile("HERE/ADAS");
-    setRoutingProfiles(["HERE/ADAS"]);
+    if (isHereDisabled()) {
+      setRoutingProfile("Car/OSRM");
+      setRoutingProfiles(["Car/OSRM"]);
+    } else {
+      setRoutingProfile("HERE/ADAS");
+      setRoutingProfiles(["HERE/ADAS"]);
+    }
     setMaxSpeedKmh(130);
     setEnableMarkov(false);
     setAY(3.5);
@@ -3117,6 +3134,7 @@ export default function CycleGenShell() {
           setRoutingProfiles(next);
           if (next.length > 0) setRoutingProfile(next[0]);
         }}
+        routerAvailability={pagesRouterAvailability()}
         routerStatus={routeResult?.router_status ?? undefined}
         departAt={departAt}
         onDepartAtChange={setDepartAt}

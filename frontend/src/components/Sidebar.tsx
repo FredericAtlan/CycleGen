@@ -510,7 +510,9 @@ export default function Sidebar({
                       Routeurs (multi)
                     </span>
                     <span className="text-[10px] text-slate-400">
-                      HERE + secours
+                      {routerAvailability?.here === false
+                        ? "OSRM (démo)"
+                        : "HERE + secours"}
                     </span>
                   </div>
                   <ul className="flex flex-col gap-1 rounded-md border border-slate-200 bg-slate-50/80 p-2">
@@ -535,7 +537,16 @@ export default function Sidebar({
                                 ? { label: "erreur", cls: "bg-rose-500/10 text-rose-700" }
                                 : { label: rawStatus, cls: "bg-slate-400/10 text-slate-500" }
                           : configuredKnown && !configured
-                            ? { label: "clé absente", cls: "bg-amber-500/10 text-amber-700" }
+                            ? {
+                                label:
+                                  key === "here"
+                                    ? "indisponible"
+                                    : "clé absente",
+                                cls:
+                                  key === "here"
+                                    ? "bg-slate-400/15 text-slate-500"
+                                    : "bg-amber-500/10 text-amber-700",
+                              }
                             : null;
                         return (
                           <li
@@ -577,22 +588,31 @@ export default function Sidebar({
                     )}
                   </ul>
                   <p className="text-[10px] leading-snug text-slate-500">
-                    Par défaut : HERE uniquement. Si HERE échoue → Mapbox →
-                    OSRM. Cocher plusieurs routeurs active le multi-compare
-                    (projection nearest-S) dans Contraintes.
+                    {routerAvailability?.here === false
+                      ? "Démo GitHub Pages : HERE désactivé (pas de clé). Routeur actif : OSRM. Pour HERE/ADAS, déployer l’API avec une clé."
+                      : "Par défaut : HERE uniquement. Si HERE échoue → Mapbox → OSRM. Cocher plusieurs routeurs active le multi-compare (projection nearest-S) dans Contraintes."}
                   </p>
                 </div>
 
                 {onApplyHomologationPreset && (
                   <button
                     type="button"
-                    disabled={paramsDisabled}
+                    disabled={
+                      paramsDisabled || routerAvailability?.here === false
+                    }
                     onClick={onApplyHomologationPreset}
-                    className="w-full rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-xs font-semibold text-emerald-900 transition hover:bg-emerald-100 disabled:opacity-50"
+                    title={
+                      routerAvailability?.here === false
+                        ? "Homologation AVL requiert HERE — indisponible sur cette démo"
+                        : undefined
+                    }
+                    className="w-full rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-xs font-semibold text-emerald-900 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Mode Homologation (AVL)
                     <span className="mt-0.5 block font-normal text-emerald-800/80">
-                      HERE · limites ON · Vmax 130 · trafic OFF · Markov OFF
+                      {routerAvailability?.here === false
+                        ? "HERE requis — grisé sur cette démo"
+                        : "HERE · limites ON · Vmax 130 · trafic OFF · Markov OFF"}
                     </span>
                   </button>
                 )}
@@ -830,10 +850,16 @@ export default function Sidebar({
               {onApplyHomologationPreset && (
                 <button
                   type="button"
-                  disabled={paramsDisabled}
+                  disabled={
+                    paramsDisabled || routerAvailability?.here === false
+                  }
                   onClick={onApplyHomologationPreset}
-                  className="rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                  title="Markov OFF, a_y=3.5, mask AVL"
+                  className="rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  title={
+                    routerAvailability?.here === false
+                      ? "HERE requis — indisponible sur cette démo"
+                      : "Markov OFF, a_y=3.5, mask AVL"
+                  }
                 >
                   Homologation AVL
                 </button>

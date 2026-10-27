@@ -9,6 +9,7 @@ import {
   listBenchmarkSources,
 } from "@/lib/api";
 import {
+  ensureRouteStudioFitPack,
   getSavedCycle,
   listSavedCycles,
   packCycle,
@@ -127,6 +128,11 @@ export default function EnergyStudyStudio() {
     (async () => {
       setLoading(true);
       setError("");
+      try {
+        await ensureRouteStudioFitPack();
+      } catch {
+        /* fit pack optionnel (Pages) */
+      }
       try {
         const sources = await listBenchmarkSources();
         if (!cancelled) {

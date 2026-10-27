@@ -530,7 +530,8 @@ export async function ensureXspaceAvlSeedCycles(): Promise<{
     return { imported: 0, total: readAll().length, skipped: true };
   }
   try {
-    const res = await fetch("/data/xspace_avl_seed_cycles.json", {
+    const { withBase } = await import("@/lib/basePath");
+    const res = await fetch(withBase("/data/xspace_avl_seed_cycles.json"), {
       cache: "no-cache",
     });
     if (!res.ok) {
@@ -590,7 +591,8 @@ export async function ensureRouteStudioFitPack(): Promise<{
     };
   }
   try {
-    const res = await fetch("/data/route_studio_fit_pack.json", {
+    const { withBase } = await import("@/lib/basePath");
+    const res = await fetch(withBase("/data/route_studio_fit_pack.json"), {
       cache: "no-cache",
     });
     if (!res.ok) {
