@@ -1033,11 +1033,9 @@ export default function CycleGenShell() {
         });
         const vehicleId =
           pending.vehicleId ||
-          (pending.corpusId.includes("alpine") ||
-          pending.corpusId.includes("grossglockner") ||
-          pending.corpusId.includes("epsim") ||
+          (pending.corpusId.includes("epsim") ||
           pending.corpusId.includes("xspace")
-            ? "plant-rs-apr2bis"
+            ? "renault-xspace-apr2bis"
             : undefined);
         const cycle = packCycle({
           name: pending.name,

@@ -8,7 +8,7 @@ import {
   deleteSavedCycle,
   elevationExtremesM,
   ensureRouteStudioFitPack,
-  ensureAvlRsSeedCycles,
+  ensureXspaceAvlSeedCycles,
   listSavedCycles,
   newCycleInstanceId,
   packCycle,
@@ -183,7 +183,7 @@ export default function CycleLibraryTable() {
     setCorpusLoading(true);
     void (async () => {
       try {
-        await ensureAvlRsSeedCycles();
+        await ensureXspaceAvlSeedCycles();
         await ensureRouteStudioFitPack();
         setTick((t) => t + 1);
       } catch {
@@ -547,7 +547,7 @@ export default function CycleLibraryTable() {
         }
         return;
       }
-      // Créateur GPS — 4 étapes restaurées (Conducteur traces reste /?mode=driver).
+      // Flux 1 — créateur GPS.
       clearStudioSession();
       seedStudioSessionFromCycle(cycle, "base");
       stashBaseCycleForStudio(cycle, "base");
@@ -817,11 +817,13 @@ export default function CycleLibraryTable() {
               }`}
               title={
                 selected.has_geo
-                  ? "Ouvrir dans Créer : Trajet / Contraintes / Conducteur / Cycle → modifier → Générer"
+                  ? "Flux 1 — charger le trajet GPS pour régénérer un cycle"
                   : "Réservé aux cycles avec GPS — utilisez Étude énergie"
               }
             >
-              {loadingId === selected.id ? "…" : "Ouvrir dans Créer"}
+              {loadingId === selected.id
+                ? "…"
+                : "Trajet GPS → cycle (Flux 1)"}
             </button>
             <button
               type="button"
@@ -875,19 +877,12 @@ export default function CycleLibraryTable() {
         </p>
       )}
       <p className="shrink-0 border-b border-slate-100 bg-slate-50 px-4 py-2 text-[11px] leading-snug text-slate-600">
-        <span className="font-semibold text-slate-800">Flux :</span>{" "}
-        <span className="text-emerald-800">Ouvrir dans Créer</span> (cycle GPS)
-        → paramètres des 4 étapes → Générer ·{" "}
-        <span className="text-amber-900">Étude énergie</span> = t / v / pente +
-        véhicule (sans GPS) · Versus pour comparer. Conducteur depuis traces ={" "}
-        <a
-          href="/?mode=driver"
-          className="font-semibold text-brand hover:underline"
-        >
-          menu Conducteur
-        </a>{" "}
-        (hors définition GPS). Manage : Importer / + Mes cycles / Renommer /
-        Supprimer.
+        <span className="font-semibold text-slate-800">2 flux :</span>{" "}
+        <span className="text-emerald-800">Trajet GPS → cycle (Flux 1)</span>{" "}
+        régénère le dynamique ·{" "}
+        <span className="text-amber-900">Étude énergie (Flux 2)</span> = t / v /
+        pente + véhicule (P / couple) · Versus pour comparer. Manage : Importer
+        / + Mes cycles / Renommer / Supprimer.
       </p>
       <div className="min-h-0 flex-1 overflow-auto">
         <table className="w-full min-w-[720px] border-collapse text-left text-xs">

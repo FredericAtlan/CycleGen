@@ -30,14 +30,11 @@ import { getVehicle, type VehicleCard } from "@/lib/vehicleLibrary";
 function defaultVehicleForCorpus(corpusId: string | null | undefined): string {
   if (
     corpusId &&
-    (corpusId.includes("avl_rs") ||
-      corpusId.includes("rs_") ||
-      corpusId.includes("alpine") ||
-      /veleta|grossglockner|iseran|stelvio/i.test(corpusId))
+    (corpusId.includes("epsim") || corpusId.includes("xspace"))
   ) {
-    return "plant-rs-apr2bis";
+    return "renault-xspace-apr2bis";
   }
-  return "plant-cspace-leapfrog-apr2bis";
+  return "renault-cspace-leapfrog-apr2bis";
 }
 
 async function cycleFromCorpus(
@@ -97,7 +94,7 @@ export default function EnergyStudyStudio() {
   const [info, setInfo] = useState("");
   const [cycle, setCycle] = useState<SavedCycle | null>(null);
   const [profile, setProfile] = useState<ConsolidatedProfile | null>(null);
-  const [vehicleId, setVehicleId] = useState("plant-rs-apr2bis");
+  const [vehicleId, setVehicleId] = useState("renault-xspace-apr2bis");
   const [slopeUnit, setSlopeUnit] = useState<SlopeUnit>("percent");
   const [corpusList, setCorpusList] = useState<BenchmarkSourceMeta[]>([]);
   const [savedList, setSavedList] = useState<SavedCycle[]>([]);
@@ -297,26 +294,26 @@ export default function EnergyStudyStudio() {
                 setLoading(true);
                 setError("");
                 void cycleFromCorpus({
-                  id: "grossglockner_descent",
-                  name: "Grossglockner — descente alpine (corpus)",
-                  source: "alpine",
-                  family: "alpine",
+                  id: "epsim_xspace_grossglockner",
+                  name: "Grossglockner EP-SIM Space (XSPACE) — v/pente",
+                  source: "oem",
+                  family: "oem",
                   url: null,
                 })
-                  .then((c) => applyCycle(c, "plant-rs-apr2bis"))
+                  .then((c) => applyCycle(c, "renault-xspace-apr2bis"))
                   .catch((e) =>
                     setError(
                       e instanceof Error
                         ? e.message
-                        : "Impossible de charger Grossglockner (corpus alpin)"
+                        : "Impossible de charger EP-SIM XSPACE"
                     )
                   )
                   .finally(() => setLoading(false));
               }}
               className="rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-950 hover:border-amber-500 disabled:opacity-50"
-              title="Trace alpine Grossglockner (benchmark) + véhicule plant-rs"
+              title="Trace EP-SIM Grossglockner + véhicule XSPACE"
             >
-              Grossglockner (alpin)
+              EP-SIM XSPACE
             </button>
           )}
           <button
@@ -377,7 +374,7 @@ export default function EnergyStudyStudio() {
           </p>
           <div className="mb-3 flex flex-wrap gap-1.5">
             {corpusList.map((s) => {
-              const featured = s.id === "grossglockner_descent";
+              const featured = s.id === "epsim_xspace_grossglockner";
               return (
               <button
                 key={s.id}
@@ -389,7 +386,7 @@ export default function EnergyStudyStudio() {
                     .then((c) =>
                       applyCycle(
                         c,
-                        featured ? "plant-rs-apr2bis" : undefined
+                        featured ? "renault-xspace-apr2bis" : undefined
                       )
                     )
                     .catch((e) =>
@@ -494,25 +491,23 @@ export default function EnergyStudyStudio() {
               onClick={() => {
                 setLoading(true);
                 void cycleFromCorpus({
-                  id: "grossglockner_descent",
-                  name: "Grossglockner — descente alpine (corpus)",
-                  source: "alpine",
-                  family: "alpine",
+                  id: "epsim_xspace_grossglockner",
+                  name: "Grossglockner EP-SIM Space (XSPACE) — v/pente",
+                  source: "oem",
+                  family: "oem",
                   url: null,
                 })
-                  .then((c) => applyCycle(c, "plant-rs-apr2bis"))
+                  .then((c) => applyCycle(c, "renault-xspace-apr2bis"))
                   .catch((e) =>
                     setError(
-                      e instanceof Error
-                        ? e.message
-                        : "Chargement Grossglockner (alpin)"
+                      e instanceof Error ? e.message : "Chargement EP-SIM"
                     )
                   )
                   .finally(() => setLoading(false));
               }}
               className="rounded-md border border-amber-400 bg-amber-50 px-3 py-1.5 text-[12px] font-semibold text-amber-950 hover:border-amber-600 disabled:opacity-50"
             >
-              Ouvrir Grossglockner (corpus alpin)
+              Ouvrir EP-SIM XSPACE Grossglockner
             </button>
             <button
               type="button"
