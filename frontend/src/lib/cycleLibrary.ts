@@ -473,6 +473,40 @@ const XSPACE_SEED_FLAG = "cyclegen.xspaceAvlSeed.v1";
  * Fetch /data/xspace_avl_seed_cycles.json once and merge into the local library.
  * Idempotent — skips if flag set and all 6 ids already present.
  */
+
+const XSPACE_LABEL_SCRUB_FLAG = "cyclegen.scrubXspaceLabels.v1";
+
+/** Remove legacy « XSPACE » brand from saved cycle labels (localStorage). */
+function scrubXspaceLabelsInSavedCycles(): number {
+  if (typeof window === "undefined") return 0;
+  if (localStorage.getItem(XSPACE_LABEL_SCRUB_FLAG) === "1") return 0;
+  const all = readAll();
+  let n = 0;
+  const next = all.map((c) => {
+    const name0 = c.name || "";
+    const source0 = c.source || "";
+    let name = name0
+      .replace(/\s*[·\-]\s*XSPACE\b/gi, "")
+      .replace(/\bXSPACE[_\s-]*/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    let source = source0
+      .replace(/\bAVL\s*XSPACE\b/gi, "Route Studio")
+      .replace(/\bXSPACE\b/gi, "Grossglockner")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    if (!name && /xspace/i.test(name0)) name = "Grossglockner";
+    if (name !== name0 || source !== source0) {
+      n += 1;
+      return { ...c, name: name || name0, source: source || source0 };
+    }
+    return c;
+  });
+  if (n > 0) writeAll(next);
+  localStorage.setItem(XSPACE_LABEL_SCRUB_FLAG, "1");
+  return n;
+}
+
 export async function ensureXspaceAvlSeedCycles(): Promise<{
   imported: number;
   total: number;
@@ -481,6 +515,7 @@ export async function ensureXspaceAvlSeedCycles(): Promise<{
   if (typeof window === "undefined") {
     return { imported: 0, total: 0, skipped: true };
   }
+  scrubXspaceLabelsInSavedCycles();
   const expected = [
     "xspace_avl_iseran_prudent",
     "xspace_avl_iseran_dynamique",

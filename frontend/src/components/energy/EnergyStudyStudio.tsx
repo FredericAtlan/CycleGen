@@ -295,7 +295,7 @@ export default function EnergyStudyStudio() {
                 setError("");
                 void cycleFromCorpus({
                   id: "epsim_xspace_grossglockner",
-                  name: "Grossglockner EP-SIM Space (XSPACE) — v/pente",
+                  name: "Grossglockner — descente alpine (v/pente)",
                   source: "oem",
                   family: "oem",
                   url: null,
@@ -305,15 +305,15 @@ export default function EnergyStudyStudio() {
                     setError(
                       e instanceof Error
                         ? e.message
-                        : "Impossible de charger EP-SIM XSPACE"
+                        : "Impossible de charger Grossglockner"
                     )
                   )
                   .finally(() => setLoading(false));
               }}
               className="rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-950 hover:border-amber-500 disabled:opacity-50"
-              title="Trace EP-SIM Grossglockner + véhicule XSPACE"
+              title="Trace Grossglockner + véhicule de référence"
             >
-              EP-SIM XSPACE
+              Grossglockner
             </button>
           )}
           <button
@@ -492,7 +492,7 @@ export default function EnergyStudyStudio() {
                 setLoading(true);
                 void cycleFromCorpus({
                   id: "epsim_xspace_grossglockner",
-                  name: "Grossglockner EP-SIM Space (XSPACE) — v/pente",
+                  name: "Grossglockner — descente alpine (v/pente)",
                   source: "oem",
                   family: "oem",
                   url: null,
@@ -507,7 +507,7 @@ export default function EnergyStudyStudio() {
               }}
               className="rounded-md border border-amber-400 bg-amber-50 px-3 py-1.5 text-[12px] font-semibold text-amber-950 hover:border-amber-600 disabled:opacity-50"
             >
-              Ouvrir EP-SIM XSPACE Grossglockner
+              Ouvrir Grossglockner
             </button>
             <button
               type="button"

@@ -153,7 +153,7 @@ export default function StudioHome() {
                 href="/?mode=energy&corpus=epsim_xspace_grossglockner"
                 className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 hover:border-slate-400 hover:bg-white"
               >
-                Grossglockner · XSPACE
+                Grossglockner
               </Link>
             </div>
           </div>

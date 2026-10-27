@@ -78,8 +78,8 @@ const SEED: VehicleCard[] = [
   },
   {
     id: "renault-xspace-apr2bis",
-    code: "XSPACE",
-    name: "XSPACE",
+    code: "Grossglockner",
+    name: "Grossglockner",
     massCode: "TM",
     mass_kg: 2556,
     f0_n: 163.2,

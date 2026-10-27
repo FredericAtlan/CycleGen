@@ -166,7 +166,7 @@ function resolveVehicleForFile(ctx: CycleExportContext): string | null {
   const entries = ctx.runMeta?.entries ?? [];
   const fromMeta = entries.find((e) => e.key === "veh_code")?.value?.trim();
   if (!fromMeta) return null;
-  // "XSPACE · XSPACE" → take first segment
+  // "CODE · label" → take first segment
   return fromMeta.split("·")[0]?.trim() || fromMeta;
 }
 
