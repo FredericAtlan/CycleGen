@@ -11,6 +11,7 @@ import {
   useHeaderChromeOptional,
   type VersusHeaderChrome,
 } from "@/components/HeaderChromeContext";
+import { isApiConfigured } from "@/lib/api";
 import { APP_AUTHOR, APP_NAME, APP_VERSION } from "@/lib/branding";
 import { hasStudioSession } from "@/lib/studioSession";
 
@@ -137,7 +138,10 @@ export default function AppHeader() {
         : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
     }`;
 
-  const createHref = "/?mode=create";
+  const apiOk = isApiConfigured();
+  const createHref = apiOk
+    ? "/?mode=create"
+    : "/?mode=energy&saved=rs_avl_grossglockner_prudent";
   const showMenu = chrome?.kind === "studio";
   const homeActive = mounted && !versus && !libActive && !createActive && !showMenu;
 
@@ -195,13 +199,15 @@ export default function AppHeader() {
           href={createHref}
           className={`${linkClass(createActive || showMenu)} inline-flex items-center gap-1.5`}
           title={
-            resumeStudio
-              ? "Reprendre la session Créer en cours"
-              : "Créer un cycle"
+            !apiOk
+              ? "Démo Pages : ouvrir Grossglockner (pas d’API GPS)"
+              : resumeStudio
+                ? "Reprendre la session Créer en cours"
+                : "Créer un cycle"
           }
         >
-          Créer
-          {resumeStudio && !showMenu ? (
+          {apiOk ? "Créer" : "Démo"}
+          {apiOk && resumeStudio && !showMenu ? (
             <span
               className="rounded bg-emerald-100 px-1 py-px text-[9px] font-bold uppercase tracking-wide text-emerald-800"
               title="Session studio en cours"

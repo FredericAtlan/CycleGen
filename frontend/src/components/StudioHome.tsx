@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import CycleLibraryTable from "@/components/CycleLibraryTable";
 import LibraryStorageBanner from "@/components/LibraryStorageBanner";
+import { isApiConfigured } from "@/lib/api";
 import { ensureRouteStudioFitPack } from "@/lib/cycleLibrary";
 import { hasStudioSession } from "@/lib/studioSession";
 
@@ -59,6 +60,7 @@ export default function StudioHome() {
   const mode = params.get("mode");
   const [mounted, setMounted] = useState(false);
   const [sessionOpen, setSessionOpen] = useState(false);
+  const apiOk = isApiConfigured();
   useEffect(() => setMounted(true), []);
   useEffect(() => {
     if (!mounted) return;
@@ -82,6 +84,27 @@ export default function StudioHome() {
   if (mode === "create") {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
+        {!apiOk && (
+          <div
+            data-testid="pages-demo-api-banner"
+            className="shrink-0 border-b border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-snug text-amber-950"
+          >
+            Démo GitHub Pages sans backend : géocodage / corridor indisponibles.{" "}
+            <Link
+              href="/"
+              className="font-semibold underline underline-offset-2"
+            >
+              Accueil
+            </Link>
+            {" · "}
+            <Link
+              href="/?mode=energy&saved=rs_avl_grossglockner_prudent"
+              className="font-semibold underline underline-offset-2"
+            >
+              Ouvrir Grossglockner
+            </Link>
+          </div>
+        )}
         <CycleGenShell />
       </div>
     );
@@ -135,7 +158,21 @@ export default function StudioHome() {
 
         <LibraryStorageBanner />
 
-        {sessionOpen && (
+        {!apiOk && (
+          <div
+            data-testid="pages-demo-home-banner"
+            className="border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-snug text-amber-950"
+          >
+            <p className="font-semibold">Démo hors ligne (GitHub Pages)</p>
+            <p className="mt-1 text-amber-900/90">
+              Pas d’API FastAPI configurée : le trajet GPS (géocodage, HERE,
+              simulation) ne peut pas tourner ici. Utilisez la bibliothèque
+              alpine ci-dessous.
+            </p>
+          </div>
+        )}
+
+        {sessionOpen && apiOk && (
           <Link
             href="/?mode=create"
             className="flex flex-col border-l-4 border-brand bg-white py-4 pl-4 pr-5 shadow-sm transition hover:bg-slate-50"
@@ -150,20 +187,38 @@ export default function StudioHome() {
         )}
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Link
-            href="/?mode=create"
-            className="flex flex-col border border-slate-200 bg-white p-5 transition hover:border-slate-400"
-          >
-            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-              Porte 1
-            </span>
-            <span className="mt-1 text-sm font-semibold text-slate-900">
-              Trajet GPS
-            </span>
-            <span className="mt-2 text-[13px] leading-snug text-slate-500">
-              Adresses → corridor → IDM/SUMO → profil, puis export et Versus.
-            </span>
-          </Link>
+          {apiOk ? (
+            <Link
+              href="/?mode=create"
+              className="flex flex-col border border-slate-200 bg-white p-5 transition hover:border-slate-400"
+            >
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                Porte 1
+              </span>
+              <span className="mt-1 text-sm font-semibold text-slate-900">
+                Trajet GPS
+              </span>
+              <span className="mt-2 text-[13px] leading-snug text-slate-500">
+                Adresses → corridor → IDM/SUMO → profil, puis export et Versus.
+              </span>
+            </Link>
+          ) : (
+            <div
+              className="flex flex-col border border-slate-200 bg-slate-100/80 p-5 opacity-70"
+              title="Nécessite NEXT_PUBLIC_API_URL (backend déployé)"
+            >
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                Porte 1 · indisponible
+              </span>
+              <span className="mt-1 text-sm font-semibold text-slate-600">
+                Trajet GPS
+              </span>
+              <span className="mt-2 text-[13px] leading-snug text-slate-500">
+                Nécessite une API déployée (Render / Railway). Sur cette démo,
+                ouvrez un cycle alpin.
+              </span>
+            </div>
+          )}
           <div className="flex flex-col border border-slate-200 bg-white p-5">
             <Link href="/?mode=energy" className="group flex flex-col">
               <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
@@ -192,11 +247,20 @@ export default function StudioHome() {
 
         <section
           data-testid="alpine-demo-library"
-          className="border border-slate-200 bg-white p-5"
+          className={`border bg-white p-5 ${
+            !apiOk
+              ? "border-brand/40 ring-1 ring-brand/20"
+              : "border-slate-200"
+          }`}
         >
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-sm font-semibold text-slate-900">
               Bibliothèque alpine
+              {!apiOk ? (
+                <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-brand">
+                  recommandé
+                </span>
+              ) : null}
             </h2>
             <Link
               href="/?mode=library"

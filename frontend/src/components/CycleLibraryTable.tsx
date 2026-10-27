@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getBenchmarkSource, listBenchmarkSources } from "@/lib/api";
+import {
+  getBenchmarkSource,
+  isApiConfigured,
+  listBenchmarkSources,
+} from "@/lib/api";
 import { CORPUS_FAMILY_LABEL } from "@/lib/corpusGroups";
 import {
   deleteSavedCycle,
@@ -190,9 +194,14 @@ export default function CycleLibraryTable() {
         /* optional seed */
       }
       try {
-        const sources = await listBenchmarkSources();
-        setCorpus(Array.isArray(sources) ? sources : []);
-        setError("");
+        if (!isApiConfigured()) {
+          setCorpus([]);
+          setError("");
+        } else {
+          const sources = await listBenchmarkSources();
+          setCorpus(Array.isArray(sources) ? sources : []);
+          setError("");
+        }
       } catch (e) {
         setCorpus([]);
         setError(

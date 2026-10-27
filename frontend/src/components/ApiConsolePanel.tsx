@@ -10,7 +10,7 @@ import {
   type ApiActivityEntry,
   type ApiActivityLevel,
 } from "@/lib/apiActivity";
-import { API_URL, WS_URL } from "@/lib/api";
+import { apiOriginLabel, wsOriginLabel } from "@/lib/api";
 
 /** Visible log rows when expanded (~4–5 lines). */
 const EXPANDED_LOG_ROWS = 5;
@@ -156,12 +156,13 @@ export default function ApiConsolePanel({
                 </span>
               ) : null}
               <span className="min-w-0 flex-1 truncate text-slate-300">
-                {last ? oneLine(last) : `prêt · ${API_URL}`}
+                {last ? oneLine(last) : `prêt · ${apiOriginLabel()}`}
               </span>
             </>
           ) : (
             <span className="hidden min-w-0 truncate text-[10px] text-slate-500 sm:inline">
-              HTTP {API_URL} · WS {WS_URL} · {entries.length} événement
+              HTTP {apiOriginLabel()} · WS {wsOriginLabel()} ·{" "}
+              {entries.length} événement
               {entries.length > 1 ? "s" : ""}
             </span>
           )}

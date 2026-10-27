@@ -31,16 +31,51 @@ import {
   endApiRequestOk,
 } from "./apiActivity";
 
+const STATIC_EXPORT =
+  process.env.NEXT_PUBLIC_STATIC_EXPORT === "1" ||
+  process.env.CYCLEGEN_STATIC_EXPORT === "1";
+
+const API_URL_ENV = (process.env.NEXT_PUBLIC_API_URL || "")
+  .trim()
+  .replace(/\/$/, "");
+
+/**
+ * Sur export Pages sans variable `NEXT_PUBLIC_API_URL`, ne jamais cibler
+ * localhost (injoignable depuis github.io). Dev local garde le défaut :8000.
+ */
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
-  "http://localhost:8000";
+  API_URL_ENV || (STATIC_EXPORT ? "" : "http://localhost:8000");
+
+const WS_URL_ENV = (process.env.NEXT_PUBLIC_WS_URL || "")
+  .trim()
+  .replace(/\/$/, "");
 
 const WS_URL =
-  process.env.NEXT_PUBLIC_WS_URL?.replace(/\/$/, "") ||
-  "ws://localhost:8000";
+  WS_URL_ENV ||
+  (API_URL_ENV
+    ? API_URL_ENV.replace(/^https:/i, "wss:").replace(/^http:/i, "ws:")
+    : STATIC_EXPORT
+      ? ""
+      : "ws://localhost:8000");
 
 /** Optional — must match backend CYCLEGEN_API_KEY when that env is set. */
 const API_KEY = (process.env.NEXT_PUBLIC_API_KEY || "").trim();
+
+const API_MISSING_MSG =
+  "API non configurée sur cette démo GitHub Pages. Utilisez la bibliothèque alpine (traces hors ligne), ou déployez le backend et renseignez NEXT_PUBLIC_API_URL.";
+
+/** True when the browser can call a configured FastAPI origin. */
+export function isApiConfigured(): boolean {
+  return Boolean(API_URL);
+}
+
+export function apiOriginLabel(): string {
+  return API_URL || "— (démo hors ligne)";
+}
+
+export function wsOriginLabel(): string {
+  return WS_URL || "—";
+}
 
 const _timeoutRaw = process.env.NEXT_PUBLIC_API_TIMEOUT_MS;
 const _timeoutParsed = _timeoutRaw != null ? Number(_timeoutRaw) : NaN;
@@ -103,6 +138,10 @@ export type ElevationLookupResult = {
 
 async function postJson<T>(path: string, body: unknown, failLabel: string): Promise<T> {
   const ctx = beginApiRequest("POST", path, body);
+  if (!API_URL) {
+    endApiRequestError(ctx, API_MISSING_MSG);
+    throw new ApiError(API_MISSING_MSG);
+  }
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {
@@ -117,13 +156,11 @@ async function postJson<T>(path: string, body: unknown, failLabel: string): Prom
       endApiRequestError(ctx, detail);
       throw new ApiError(detail);
     }
-    endApiRequestError(
-      ctx,
-      "API injoignable — backend démarré sur le port 8000 ?"
-    );
-    throw new ApiError(
-      "Cannot reach CycleGen API. Is the backend running?"
-    );
+    const detail = STATIC_EXPORT
+      ? `API injoignable (${API_URL}) — vérifier le backend et CORS.`
+      : "API injoignable — backend démarré sur le port 8000 ?";
+    endApiRequestError(ctx, detail);
+    throw new ApiError(detail);
   }
 
   if (!res.ok) {
@@ -373,6 +410,10 @@ export async function exportProfile(
   const body: ExportRequest = { profile, format };
   const ctx = beginApiRequest("POST", "/api/export", body);
 
+  if (!API_URL) {
+    endApiRequestError(ctx, API_MISSING_MSG);
+    throw new ApiError(API_MISSING_MSG);
+  }
   let res: Response;
   try {
     res = await fetch(`${API_URL}/api/export`, {
@@ -382,13 +423,11 @@ export async function exportProfile(
       signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
   } catch {
-    endApiRequestError(
-      ctx,
-      "API injoignable — backend démarré sur le port 8000 ?"
-    );
-    throw new ApiError(
-      "Cannot reach CycleGen API. Is the backend running on port 8000?"
-    );
+    const detail = STATIC_EXPORT
+      ? `API injoignable (${API_URL}) — vérifier le backend et CORS.`
+      : "API injoignable — backend démarré sur le port 8000 ?";
+    endApiRequestError(ctx, detail);
+    throw new ApiError(detail);
   }
 
   if (!res.ok) {
@@ -431,6 +470,10 @@ export function downloadBlob(blob: Blob, filename: string): void {
 
 async function getJson<T>(path: string, failLabel: string): Promise<T> {
   const ctx = beginApiRequest("GET", path);
+  if (!API_URL) {
+    endApiRequestError(ctx, API_MISSING_MSG);
+    throw new ApiError(API_MISSING_MSG);
+  }
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {
@@ -443,8 +486,11 @@ async function getJson<T>(path: string, failLabel: string): Promise<T> {
       endApiRequestError(ctx, detail);
       throw new ApiError(detail);
     }
-    endApiRequestError(ctx, "API injoignable — backend démarré ?");
-    throw new ApiError("Cannot reach CycleGen API. Is the backend running?");
+    const detail = STATIC_EXPORT
+      ? `API injoignable (${API_URL}) — vérifier le backend et CORS.`
+      : "API injoignable — backend démarré ?";
+    endApiRequestError(ctx, detail);
+    throw new ApiError(detail);
   }
   if (!res.ok) {
     let detail = `${failLabel} (${res.status})`;
@@ -466,8 +512,9 @@ async function getJson<T>(path: string, failLabel: string): Promise<T> {
   return data;
 }
 
-/** GET /api/benchmark/sources */
+/** GET /api/benchmark/sources — empty on Pages démo sans API (pas d’appel localhost). */
 export async function listBenchmarkSources(): Promise<BenchmarkSourceMeta[]> {
+  if (!isApiConfigured()) return [];
   return getJson<BenchmarkSourceMeta[]>(
     "/api/benchmark/sources",
     "Benchmark sources failed"
