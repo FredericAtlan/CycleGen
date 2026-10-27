@@ -67,53 +67,52 @@ test.describe("GitHub Pages live demo", () => {
     });
     await expect(page.getByText(/Photon \+ OSRM/i)).toBeVisible();
 
-    // Fill A/B and trigger route analyze (client OSRM)
-    const dep = page.getByLabel(/départ|departure|origine/i).or(
-      page.getByPlaceholder(/adresse|départ|paris/i)
-    ).first();
-    const arr = page.getByLabel(/arriv|destination/i).or(
-      page.getByPlaceholder(/arriv|destination/i)
-    ).first();
+    // Wait for dynamic CycleGenShell (sidebar address fields)
+    await expect(
+      page.getByText(/ouverture du créateur/i)
+    ).toHaveCount(0, { timeout: 30_000 });
+    const dep = page.getByPlaceholder(/adresse ou gps/i).first();
+    const arr = page.getByPlaceholder(/adresse ou gps/i).nth(1);
+    await expect(dep).toBeVisible({ timeout: 30_000 });
+    await expect(arr).toBeVisible();
 
-    // Fallback: sidebar text inputs near known labels
-    const inputs = page.locator('input[type="text"], input:not([type])');
-    const count = await inputs.count();
-    expect(count, "expected address inputs in create mode").toBeGreaterThan(0);
+    await dep.fill("Tour Eiffel, Paris");
+    await arr.fill("Notre-Dame de Paris");
 
-    // Prefer labeled fields when present
-    if (await dep.count()) {
-      await dep.fill("Tour Eiffel, Paris");
-    } else {
-      await inputs.nth(0).fill("Tour Eiffel, Paris");
-    }
-    if (await arr.count()) {
-      await arr.fill("Notre-Dame, Paris");
-    } else if (count > 1) {
-      await inputs.nth(1).fill("Notre-Dame, Paris");
-    }
-
-    const analyze = page.getByRole("button", {
-      name: /analyser|itinéraire|générer le corridor|calculer|construire/i,
+    const locate = page.getByRole("button", { name: /^localiser$/i });
+    await expect(locate.first()).toBeEnabled({ timeout: 10_000 });
+    await locate.first().click();
+    await expect(page.getByText(/^localisé$/i).first()).toBeVisible({
+      timeout: 45_000,
     });
-    if (await analyze.count()) {
-      await analyze.first().click();
-    } else {
-      // Geocode buttons then analyze
-      const geo = page.getByRole("button", { name: /géocod/i });
-      if (await geo.count()) {
-        await geo.first().click();
-        if ((await geo.count()) > 1) await geo.nth(1).click();
-      }
-    }
+    await locate.nth(1).click();
+    await expect(page.getByText(/^localisé$/i)).toHaveCount(2, {
+      timeout: 45_000,
+    });
 
-    // Expect either map polyline activity or console hop to Photon/OSRM
-    await page.getByRole("button", { name: /déplier|console/i }).first().click().catch(() => {});
+    const calc = page.getByRole("button", {
+      name: /calculer l[’']itinéraire/i,
+    });
+    await expect(calc).toBeVisible({ timeout: 15_000 });
+    await calc.click();
+
+    // Real route result (not just the demo banner mentioning Photon/OSRM)
     await expect
-      .poll(async () => {
-        const body = await page.locator("body").innerText();
-        return /photon|osrm|itinéraire|km|géocod/i.test(body);
-      }, { timeout: 60_000 })
+      .poll(
+        async () => {
+          const body = await page.locator("body").innerText();
+          return /\d+([.,]\d+)?\s*km/i.test(body);
+        },
+        { timeout: 90_000 }
+      )
       .toBeTruthy();
+
+    await page.getByRole("button", { name: /déplier/i }).click().catch(() => {});
+    const consoleText = await page.locator("footer, [aria-label='Console API']").innerText();
+    expect(
+      /photon|osrm|géocod|itinéraire/i.test(consoleText),
+      `console after route: ${consoleText.slice(0, 400)}`
+    ).toBeTruthy();
 
     expect(errors, `pageerrors: ${errors.join("; ")}`).toEqual([]);
   });
