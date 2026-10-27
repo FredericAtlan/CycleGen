@@ -236,9 +236,6 @@ export default function Sidebar({
   maxSpeedKmh,
   onMaxSpeedKmhChange,
   envelopeMask,
-  onEnvelopeMaskChange,
-  onCursorS,
-  onBrushRangeS,
   enableMarkov = false,
   onEnableMarkovChange,
   onApplyHomologationPreset,
@@ -248,10 +245,7 @@ export default function Sidebar({
   includeTrafficLights = true,
   onIncludeTrafficLightsChange,
   slopeAlgo,
-  onSlopeAlgoChange,
   legalFilter,
-  onLegalFilterChange,
-  routeElevationsM = null,
   analyzing,
   canAnalyze,
   generatingCycle = false,
@@ -270,8 +264,6 @@ export default function Sidebar({
   onVehicleSelect,
   corridor = null,
   onCorridorChange,
-  slopeUnit = "percent",
-  onSlopeUnitChange,
   profile = null,
   preferredEngine = "idm",
   onPreferredEngineChange,
@@ -772,14 +764,6 @@ export default function Sidebar({
               </div>
             </AccordionSection>
 
-            {warnings.length > 0 && (
-              <WarningsPanel
-                warnings={warnings}
-                title="Alertes & imputations"
-                collapsible
-                defaultOpen={warnings.length <= 6}
-              />
-            )}
             {buildingCorridor ? (
               <BuildProgressGauge active phase="corridor" variant="panel" />
             ) : null}
@@ -1164,6 +1148,17 @@ export default function Sidebar({
             )}
           </div>
         )}
+
+        {warnings.length > 0 && activeStep >= 1 && activeStep <= 3 && (
+          <div className="mt-3">
+            <WarningsPanel
+              warnings={warnings}
+              title="Alertes & imputations"
+              collapsible
+              defaultOpen={warnings.length <= 6}
+            />
+          </div>
+        )}
       </div>
 
       {activeStep === 1 && (
@@ -1198,7 +1193,11 @@ export default function Sidebar({
                 : "Générer le cycle"
           }
           busy={generatingCycle || analyzing || buildingCorridor}
-          disabled={!canAnalyze || ctaDisabled}
+          disabled={
+            generatingCycle
+              ? true
+              : !canBuildCorridor || ctaDisabled
+          }
           onClick={onCta}
           progressPhase={
             generatingCycle
@@ -1213,10 +1212,33 @@ export default function Sidebar({
       )}
       {activeStep === 4 && (
         <WizardCta
-          label="Analyser dans Versus"
-          busy={false}
-          disabled={!profile || profile.time.length < 2}
+          label={
+            generatingCycle || busy
+              ? "Génération du cycle…"
+              : paramsDirty
+                ? "Appliquer et générer"
+                : "Analyser dans Versus"
+          }
+          busy={generatingCycle || (paramsDirty && (analyzing || buildingCorridor))}
+          disabled={
+            generatingCycle
+              ? true
+              : paramsDirty
+                ? !canAnalyze || ctaDisabled
+                : !profile || profile.time.length < 2
+          }
           onClick={onCta}
+          progressPhase={
+            generatingCycle
+              ? "generating"
+              : paramsDirty
+                ? buildingCorridor
+                  ? "corridor"
+                  : analyzing
+                    ? "analyzing"
+                    : null
+                : null
+          }
         />
       )}
     </aside>

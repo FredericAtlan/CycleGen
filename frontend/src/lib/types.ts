@@ -12,6 +12,52 @@ export type RoutePoint = LatLon & {
 
 export type RoutingProfile = "Car/OSRM" | "Mapbox/Traffic" | "HERE/ADAS";
 
+export const ROUTING_PROFILES: readonly RoutingProfile[] = [
+  "HERE/ADAS",
+  "Mapbox/Traffic",
+  "Car/OSRM",
+] as const;
+
+/** Coerce saved / legacy labels (e.g. « AVL Route Studio ») to a valid API profile. */
+export function normalizeRoutingProfile(
+  raw: unknown,
+  fallback: RoutingProfile = "HERE/ADAS"
+): RoutingProfile {
+  if (typeof raw !== "string") return fallback;
+  const s = raw.trim();
+  if ((ROUTING_PROFILES as readonly string[]).includes(s)) {
+    return s as RoutingProfile;
+  }
+  const lower = s.toLowerCase();
+  if (lower.includes("here") || lower.includes("adas") || lower.includes("avl")) {
+    return "HERE/ADAS";
+  }
+  if (lower.includes("mapbox") || lower.includes("traffic")) {
+    return "Mapbox/Traffic";
+  }
+  if (lower.includes("osrm") || lower.includes("car")) {
+    return "Car/OSRM";
+  }
+  return fallback;
+}
+
+export function normalizeRoutingProfiles(
+  raw: unknown,
+  fallback: RoutingProfile[] = ["HERE/ADAS"]
+): RoutingProfile[] {
+  const list = Array.isArray(raw) ? raw : raw != null ? [raw] : [];
+  const out: RoutingProfile[] = [];
+  const seen = new Set<RoutingProfile>();
+  for (const item of list) {
+    const p = normalizeRoutingProfile(item, fallback[0] ?? "HERE/ADAS");
+    if (!seen.has(p)) {
+      seen.add(p);
+      out.push(p);
+    }
+  }
+  return out.length ? out : fallback.slice();
+}
+
 export type DriverProfile =
   | "Eco"
   | "Normal"
@@ -324,6 +370,9 @@ export type SimulateStartRequest = {
     s0?: number | null;
     jerk_max?: number | null;
     jerk_brake_max?: number | null;
+    pedal_tau_s?: number | null;
+    vdes_tau_s?: number | null;
+    descent_hold_gain?: number | null;
   } | null;
   driver_zones?: Array<{
     id?: string;
@@ -334,6 +383,14 @@ export type SimulateStartRequest = {
     b_comf?: number | null;
     speed_factor?: number | null;
     a_y_mps2?: number | null;
+    T?: number | null;
+    T_h?: number | null;
+    s0?: number | null;
+    jerk_max?: number | null;
+    jerk_brake_max?: number | null;
+    pedal_tau_s?: number | null;
+    vdes_tau_s?: number | null;
+    descent_hold_gain?: number | null;
   }> | null;
   /** Force TLS planning mode when API supports it. */
   tls_override?: TlsOverride | null;
@@ -448,7 +505,7 @@ export type SimulateStopResponse = {
 
 /** Step 4 — Export */
 
-export type ExportFormat = "csv" | "xml";
+export type ExportFormat = "csv" | "xml" | "xlsx";
 
 export type ExportRequest = {
   profile: ConsolidatedProfile;

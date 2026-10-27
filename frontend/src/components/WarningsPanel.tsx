@@ -19,6 +19,19 @@ function formatRange(w: CycleGenWarning): string {
   return ` @ ${Math.round(w.s0)}–${Math.round(w.s1)} m`;
 }
 
+/** French labels for known warning codes (fallback = raw code). */
+const WARNING_CODE_LABELS: Record<string, string> = {
+  overpass_unavailable: "Overpass indisponible",
+  elevation_flat: "Altimétrie plate / indisponible",
+  osm_maxspeed_overlay: "Maxspeed OSM appliqué",
+  warnings_truncated: "Alertes tronquées",
+  slope_spike_residual: "Pic de pente résiduel",
+};
+
+function warningCodeLabel(code: string): string {
+  return WARNING_CODE_LABELS[code] ?? code;
+}
+
 function summarizeWarnings(warnings: CycleGenWarning[]): string {
   const byCode = new Map<string, number>();
   for (const w of warnings) {
@@ -28,7 +41,7 @@ function summarizeWarnings(warnings: CycleGenWarning[]): string {
   const top = [...byCode.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 4)
-    .map(([code, n]) => `${code} ×${n}`);
+    .map(([code, n]) => `${warningCodeLabel(code)} ×${n}`);
   const more = byCode.size > 4 ? ` · +${byCode.size - 4} types` : "";
   return `${top.join(" · ")}${more}`;
 }
@@ -55,7 +68,7 @@ function WarningsPanel({
         >
           <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
             <span className="font-mono text-[10px] font-semibold uppercase text-amber-800">
-              {w.code}
+              {warningCodeLabel(w.code)}
             </span>
             {w.source && (
               <span className="text-[10px] text-slate-400">{w.source}</span>

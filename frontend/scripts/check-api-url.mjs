@@ -5,9 +5,19 @@
  * Exit 0 on success, 1 on failure.
  */
 
+function httpOriginToWsOrigin(httpBase) {
+  try {
+    const u = new URL(httpBase);
+    u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
+    return u.origin;
+  } catch {
+    return httpBase.replace(/^https/i, "wss").replace(/^http/i, "ws");
+  }
+}
+
 const WS_URL = "ws://localhost:8000";
 
-function simulationWsUrl(wsPath, wsToken, wsBase = WS_URL) {
+function simulationWsUrl(wsPath, wsToken, wsBase = WS_URL, cgTicket) {
   if (
     !wsPath ||
     !wsPath.startsWith("/") ||
@@ -19,9 +29,11 @@ function simulationWsUrl(wsPath, wsToken, wsBase = WS_URL) {
     );
   }
   let url = `${wsBase.replace(/\/$/, "")}${wsPath}`;
-  if (wsToken) {
-    url += `${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(wsToken)}`;
-  }
+  const params = new URLSearchParams();
+  if (wsToken) params.set("token", wsToken);
+  if (cgTicket) params.set("cg_ticket", cgTicket);
+  const q = params.toString();
+  if (q) url += `${url.includes("?") ? "&" : "?"}${q}`;
   return url;
 }
 
@@ -71,6 +83,22 @@ assertEqual(
   simulationWsUrl("/api/simulate/ws/y", undefined, "ws://127.0.0.1:8001/"),
   "ws://127.0.0.1:8001/api/simulate/ws/y",
   "base trailing slash stripped"
+);
+assertEqual(
+  simulationWsUrl("/api/simulate/ws/abc", "tok", WS_URL, "1.abc123"),
+  "ws://localhost:8000/api/simulate/ws/abc?token=tok&cg_ticket=1.abc123",
+  "cg_ticket query"
+);
+
+assertEqual(
+  httpOriginToWsOrigin("https://api.example.onrender.com"),
+  "wss://api.example.onrender.com",
+  "https API → wss fallback"
+);
+assertEqual(
+  httpOriginToWsOrigin("http://localhost:8000"),
+  "ws://localhost:8000",
+  "http API → ws fallback"
 );
 
 if (!process.exitCode) {

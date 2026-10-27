@@ -288,7 +288,10 @@ export default function ElevationProfileChart({
   }, [corridor.S, corridor.elevations_m, tall, expanded]);
 
   const profile = corridor.slope_profile ?? null;
-  const kmSegments = profile?.km_segments ?? [];
+  const kmSegments = useMemo(
+    () => profile?.km_segments ?? [],
+    [profile?.km_segments]
+  );
   const L =
     profile?.trap_length_m ??
     trapLengthM ??

@@ -1,8 +1,9 @@
 /** Studio step help + science catalog for the help drawer. */
 
 import type { StudioWizardStep } from "@/components/StudioStepper";
+import { withBase } from "@/lib/basePath";
 
-export type HelpTab = "step" | "architecture" | "science";
+export type HelpTab = "step" | "ide" | "architecture" | "science";
 
 export type StepHelpMeta = {
   step: StudioWizardStep;
@@ -43,6 +44,13 @@ export const STEP_HELP_DOCS: StepHelpMeta[] = [
   },
 ];
 
+export const IDE_HELP = {
+  id: "ide-workspace",
+  file: "ide-workspace.md",
+  title: "IDE workspace",
+  summary: "Assets · canvas · inspecteur · cheap/expensive · fit async",
+};
+
 export const ARCHITECTURE_HELP = {
   id: "architecture",
   file: "architecture-modeles.md",
@@ -51,7 +59,7 @@ export const ARCHITECTURE_HELP = {
 };
 
 export function stepHelpUrl(file: string): string {
-  return `/docs/help/${file}`;
+  return withBase(`/docs/help/${file}`);
 }
 
 export function stepHelpFor(step: StudioWizardStep): StepHelpMeta {

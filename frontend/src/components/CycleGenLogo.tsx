@@ -5,7 +5,7 @@ type CycleGenLogoProps = {
 };
 
 /**
- * Journey A → B whose two branches form a diamond (Renault-inspired geometry).
+ * Journey A → B whose two branches form a diamond (OEM-inspired geometry).
  * Original CycleGen mark — not a trademark reproduction.
  */
 export default function CycleGenLogo({ className }: CycleGenLogoProps) {

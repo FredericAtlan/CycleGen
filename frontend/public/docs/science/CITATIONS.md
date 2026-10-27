@@ -55,17 +55,17 @@ but ship unrelated GPS (e.g. regional OBD dumps).
 
 Please cite Zheng et al. when publishing results that use GeoLife extracts.
 
-## Renault — Grossglockner Route Planner (OEM)
+## OEM — Grossglockner Route Planner (OEM)
 
 | Field | Value |
 |-------|--------|
-| ID | `renault_grossglockner_route_planner` |
+| ID | `oem_grossglockner_route_planner` |
 | Source file | `Velocity_Profile_Grossglockner_Route_Planner.xlsx` |
 | Added | 2026-09-03 |
-| Content | Official Renault velocity / accel / slope profile (~14.2 km, ~985 s) |
+| Content | Official OEM velocity / accel / slope profile (~14.2 km, ~985 s) |
 | Zones | **1st Part** `s ∈ [0, 1116)` m · **2nd Part** `s ∈ [1116, end)` m |
 | Zone cut | Chosen so sheet average speeds (29.74 / 54.2 km/h) match ∫v dt segments |
-| Notes | Velocity / accel / slope = Renault OEM. **No lat/lon** — dynamics / chart reference only (proprietary engineering data). |
+| Notes | Velocity / accel / slope = OEM. **No lat/lon** — dynamics / chart reference only (proprietary engineering data). |
 | Vehicle (sheet) | Mass 2700 kg · Power 220 kW |
 
 Zone driver limits (sheet *Summery*, Test):

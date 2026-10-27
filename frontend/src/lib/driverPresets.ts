@@ -15,6 +15,12 @@ export type DriverPhysics = {
   jerk_max: number;
   /** Max |da/dt| when braking (m/s³). */
   jerk_brake_max: number;
+  /** First-order pedal lag on a_cmd (s). 0 = off. */
+  pedal_tau_s: number;
+  /** Low-pass on v_des (s). 0 = off. */
+  vdes_tau_s: number;
+  /** Soft descent hold gain. 0 = off. */
+  descent_hold_gain: number;
 };
 
 export type DriverPresetMeta = {
@@ -58,6 +64,9 @@ export const DRIVER_PRESETS: DriverPresetMeta[] = [
       T_h: 5.0,
       s0: 3.0,
       speed_factor: 0.95,
+      pedal_tau_s: 0,
+      vdes_tau_s: 0,
+      descent_hold_gain: 0,
     },
   },
   {
@@ -75,6 +84,9 @@ export const DRIVER_PRESETS: DriverPresetMeta[] = [
       T_h: 3.5,
       s0: 2.0,
       speed_factor: 1.05,
+      pedal_tau_s: 0,
+      vdes_tau_s: 0,
+      descent_hold_gain: 0,
     },
   },
   {
@@ -92,6 +104,9 @@ export const DRIVER_PRESETS: DriverPresetMeta[] = [
       T_h: 2.5,
       s0: 1.5,
       speed_factor: 1.1,
+      pedal_tau_s: 0,
+      vdes_tau_s: 0,
+      descent_hold_gain: 0,
     },
   },
   {
@@ -99,7 +114,7 @@ export const DRIVER_PRESETS: DriverPresetMeta[] = [
     presetId: "prudent",
     label: "Prudent (AVL Route Studio)",
     blurb:
-      "Fingerprint AVL Route Studio « conducteur prudent » — a+/jerk doux, sf P90≈1,02, a_y≈3,3.",
+      "Calibré AVL Route Studio « conducteur prudent » — a+/jerk doux, sf P90≈1,02, a_y≈3,3.",
     a_y: 3.27,
     physics: {
       a_max: 1.29,
@@ -110,6 +125,9 @@ export const DRIVER_PRESETS: DriverPresetMeta[] = [
       T_h: 4.5,
       s0: 2.8,
       speed_factor: 1.02,
+      pedal_tau_s: 0,
+      vdes_tau_s: 0,
+      descent_hold_gain: 0,
     },
   },
   {
@@ -117,7 +135,7 @@ export const DRIVER_PRESETS: DriverPresetMeta[] = [
     presetId: "dynamique",
     label: "Dynamique (AVL Route Studio)",
     blurb:
-      "Fingerprint AVL Route Studio « conducteur dynamique » — a−/jerk élevés, sf P90≈1,05, a_y≈4,9.",
+      "Calibré AVL Route Studio « conducteur dynamique » — a−/jerk élevés, sf P90≈1,05, a_y≈4,9.",
     a_y: 4.9,
     physics: {
       a_max: 2.08,
@@ -128,6 +146,9 @@ export const DRIVER_PRESETS: DriverPresetMeta[] = [
       T_h: 3.0,
       s0: 1.8,
       speed_factor: 1.05,
+      pedal_tau_s: 0,
+      vdes_tau_s: 0,
+      descent_hold_gain: 0,
     },
   },
 ];
@@ -142,6 +163,9 @@ export const BCB_DRIVER_PHYSICS: DriverPhysics = {
   T_h: 4.0,
   s0: 2.5,
   speed_factor: 1.05,
+  pedal_tau_s: 0,
+  vdes_tau_s: 0,
+  descent_hold_gain: 0,
 };
 
 export const BCB_DRIVER_A_Y = 3.5;
@@ -181,7 +205,10 @@ export function physicsEqual(a: DriverPhysics, b: DriverPhysics): boolean {
     a.T_h === b.T_h &&
     a.s0 === b.s0 &&
     a.jerk_max === b.jerk_max &&
-    a.jerk_brake_max === b.jerk_brake_max
+    a.jerk_brake_max === b.jerk_brake_max &&
+    (a.pedal_tau_s ?? 0) === (b.pedal_tau_s ?? 0) &&
+    (a.vdes_tau_s ?? 0) === (b.vdes_tau_s ?? 0) &&
+    (a.descent_hold_gain ?? 0) === (b.descent_hold_gain ?? 0)
   );
 }
 
@@ -197,7 +224,35 @@ export function defaultDriverPhysics(): DriverPhysics {
 export function completePhysics(
   partial: Partial<DriverPhysics> | null | undefined
 ): DriverPhysics {
-  return { ...BCB_DRIVER_PHYSICS, ...(partial ?? {}) };
+  const base = { ...BCB_DRIVER_PHYSICS, ...(partial ?? {}) };
+  return {
+    ...base,
+    pedal_tau_s: base.pedal_tau_s ?? 0,
+    vdes_tau_s: base.vdes_tau_s ?? 0,
+    descent_hold_gain: base.descent_hold_gain ?? 0,
+  };
+}
+
+function clampNum(n: number, lo: number, hi: number): number {
+  if (!Number.isFinite(n)) return lo;
+  return Math.min(hi, Math.max(lo, n));
+}
+
+/** Clamp physics to POST /simulate DriverParamOverrides bounds (avoid 422). */
+export function clampDriverParamsForApi(p: DriverPhysics): DriverPhysics {
+  return {
+    a_max: clampNum(p.a_max, 0.2, 12),
+    b_comf: clampNum(p.b_comf, 0.5, 15),
+    speed_factor: clampNum(p.speed_factor, 0.4, 1.5),
+    T: clampNum(p.T, 0.3, 4),
+    T_h: clampNum(p.T_h, 0.5, 12),
+    s0: clampNum(p.s0, 0.5, 10),
+    jerk_max: clampNum(p.jerk_max, 0, 20),
+    jerk_brake_max: clampNum(p.jerk_brake_max, 0, 20),
+    pedal_tau_s: clampNum(p.pedal_tau_s ?? 0, 0, 10),
+    vdes_tau_s: clampNum(p.vdes_tau_s ?? 0, 0, 10),
+    descent_hold_gain: clampNum(p.descent_hold_gain ?? 0, 0, 20),
+  };
 }
 
 /** Match UI preset from physics + a_y, or null if custom. */
@@ -250,5 +305,17 @@ export const DRIVER_UI_DOCS = {
   a_y: {
     title: "a_y — latéral",
     body: "Tolérance centrifuge en courbe : V = √(a_y · R).",
+  },
+  pedal_tau_s: {
+    title: "pedal_τ — filtre 1er ordre",
+    body: "Constante de temps (s) du filtre 1er ordre sur a_cmd. 0 = off · plage 0–10 s. ↑ = pédale plus lente / plus lisse.",
+  },
+  vdes_tau_s: {
+    title: "vdes_τ — low-pass consigne",
+    body: "Constante de temps (s) du low-pass sur v_des. 0 = off · plage 0–10 s. ↑ = consigne moins nerveuse.",
+  },
+  descent_hold_gain: {
+    title: "hold — retention descente",
+    body: "Gain de retention douce en descente. 0 = off · plage 0–10.",
   },
 } as const;

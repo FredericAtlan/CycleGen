@@ -24,6 +24,7 @@ Chaque chapitre suit le même schéma :
 | 05 | [Moteurs SUMO vs IDM](05-moteurs-sumo-idm.md) | Deux moteurs, fallback, parité paramétrique |
 | 06 | [Benchmark & recalage](06-benchmark-recalage.md) | Corpus, KPIs, hints, injection / comparaison |
 | 07 | [Limites & bonnes pratiques](07-limites-bonnes-pratiques.md) | Warnings, non-claims, usage scientifique |
+| 08 | [Route Studio fit](08-route-studio-fit.md) | Fingerprint, pedal lag, jobs async, pack fidélité |
 
 ## Message d’honnêteté scientifique (à retenir)
 

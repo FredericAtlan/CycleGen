@@ -5,7 +5,7 @@ import DownloadButtons from "@/components/export/DownloadButtons";
 import SaveCycleButton from "@/components/SaveCycleButton";
 import ResultsAnalyseStudio from "@/components/export/ResultsAnalyseStudio";
 import SafetyAuditBanner from "@/components/scenarios/SafetyAuditBanner";
-import WarningsPanel, {
+import {
   trafficSourceBadgeClass,
   trafficSourceLabel,
 } from "@/components/WarningsPanel";

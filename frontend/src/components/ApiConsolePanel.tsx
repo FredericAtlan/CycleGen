@@ -81,7 +81,13 @@ export default function ApiConsolePanel({
   const [pending, setPending] = useState(() => getApiInflight());
   const [autoScroll, setAutoScroll] = useState(true);
   const [filter, setFilter] = useState<string>("all");
+  /** Avoid SSR/CSR mismatch on API base / WS labels (BFF vs direct backend). */
+  const [mounted, setMounted] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const unsubLog = subscribeApiActivity((entry) => {
@@ -156,13 +162,23 @@ export default function ApiConsolePanel({
                 </span>
               ) : null}
               <span className="min-w-0 flex-1 truncate text-slate-300">
-                {last ? oneLine(last) : `prêt · ${API_URL}`}
+                {last
+                  ? oneLine(last)
+                  : mounted
+                    ? `prêt · ${API_URL}`
+                    : "prêt · …"}
               </span>
             </>
           ) : (
             <span className="hidden min-w-0 truncate text-[10px] text-slate-500 sm:inline">
-              HTTP {API_URL} · WS {WS_URL} · {entries.length} événement
-              {entries.length > 1 ? "s" : ""}
+              {mounted ? (
+                <>
+                  HTTP {API_URL} · WS {WS_URL} · {entries.length} événement
+                  {entries.length > 1 ? "s" : ""}
+                </>
+              ) : (
+                <>HTTP … · WS …</>
+              )}
             </span>
           )}
           {live ? (

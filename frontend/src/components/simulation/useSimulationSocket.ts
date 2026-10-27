@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { SimulationFrame } from "@/lib/types";
+import { redactUrlForLog } from "@/lib/api";
 import { emitApiActivity } from "@/lib/apiActivity";
 
 export type SimSocketStatus =
@@ -59,12 +60,13 @@ export function useSimulationSocket({
         onReconnectRef.current?.();
       }
       onStatusRef.current(isReconnect ? "reconnecting" : "connecting");
+      const safeUrl = redactUrlForLog(url);
       emitApiActivity({
         level: "ws",
         label: isReconnect
           ? "WebSocket · reconnexion…"
           : "WebSocket · ouverture…",
-        detail: url,
+        detail: safeUrl,
       });
       try {
         ws = new WebSocket(url);
@@ -73,7 +75,7 @@ export function useSimulationSocket({
         emitApiActivity({
           level: "error",
           label: "WebSocket · échec d’ouverture",
-          detail: url,
+          detail: safeUrl,
         });
         return;
       }
@@ -86,7 +88,7 @@ export function useSimulationSocket({
           level: "ws",
           label: "WebSocket · connecté",
           status: "OPEN",
-          detail: url,
+          detail: safeUrl,
         });
       };
 
@@ -142,7 +144,7 @@ export function useSimulationSocket({
         emitApiActivity({
           level: "error",
           label: "WebSocket · erreur",
-          detail: url,
+          detail: safeUrl,
         });
       };
 
@@ -164,7 +166,7 @@ export function useSimulationSocket({
         emitApiActivity({
           level: "warn",
           label: "WebSocket · coupure — reconnexion…",
-          detail: url,
+          detail: safeUrl,
         });
         if (!didReconnect) {
           didReconnect = true;

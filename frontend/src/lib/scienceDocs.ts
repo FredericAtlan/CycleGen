@@ -1,5 +1,7 @@
 /** Catalog of scientific help chapters (served from /docs/science/). */
 
+import { withBase } from "@/lib/basePath";
+
 export type ScienceDocMeta = {
   id: string;
   file: string;
@@ -62,8 +64,14 @@ export const SCIENCE_DOCS: ScienceDocMeta[] = [
     title: "Limites & bonnes pratiques",
     summary: "Warnings, non-claims, checklist",
   },
+  {
+    id: "08",
+    file: "08-route-studio-fit.md",
+    title: "Route Studio fit",
+    summary: "Fingerprint, pedal lag, jobs async, pack fidélité",
+  },
 ];
 
 export function scienceDocUrl(file: string): string {
-  return `/docs/science/${file}`;
+  return withBase(`/docs/science/${file}`);
 }

@@ -29,9 +29,9 @@ const STAGES: Record<BuildPhase, Stage[]> = {
   ],
 };
 
-/** Soft progress: climbs fast then asymptotes under 93 % until the request ends. */
+/** Soft progress: climbs fast then asymptotes under 97 % until the request ends. */
 function softPct(elapsedSec: number, tauSec: number): number {
-  return 93 * (1 - Math.exp(-elapsedSec / Math.max(tauSec, 1)));
+  return 97 * (1 - Math.exp(-elapsedSec / Math.max(tauSec, 1)));
 }
 
 function stageLabel(phase: BuildPhase, pct: number): string {

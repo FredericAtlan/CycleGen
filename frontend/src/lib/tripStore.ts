@@ -63,6 +63,9 @@ function normalizePhysics(raw: unknown): DriverPhysics {
     s0: asNumber(raw.s0, base.s0),
     jerk_max: asNumber(raw.jerk_max, base.jerk_max),
     jerk_brake_max: asNumber(raw.jerk_brake_max, base.jerk_brake_max),
+    pedal_tau_s: asNumber(raw.pedal_tau_s, 0),
+    vdes_tau_s: asNumber(raw.vdes_tau_s, 0),
+    descent_hold_gain: asNumber(raw.descent_hold_gain, 0),
   };
 }
 

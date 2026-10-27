@@ -14,6 +14,17 @@ import type { DriverProfile } from "@/lib/types";
 const STORAGE_KEY = "cyclegen.drivers.v3";
 const MAX_DRIVERS = 40;
 
+export type SavedDriverSourceProfile = {
+  filename: string;
+  /** Fingerprint metrics used at identification time. */
+  fingerprint: Record<string, number>;
+  /** Downsampled time [s]. */
+  time: number[];
+  /** Downsampled realized speed [m/s]. */
+  velocity_mps: number[];
+  n_raw?: number;
+};
+
 export type SavedDriver = {
   id: string;
   name: string;
@@ -24,6 +35,12 @@ export type SavedDriver = {
   notes?: string;
   /** Built-in seed — cannot delete. */
   seed?: boolean;
+  /** Optional tags (RS / PreA / custom). */
+  tags?: string[];
+  /** SHA-256 of source file used for fingerprint (if any). */
+  sourceSha256?: string | null;
+  /** Profil v(t) qui a servi à l’identification (sous-échantillonné). */
+  sourceProfile?: SavedDriverSourceProfile | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -70,6 +87,71 @@ function asOptNum(v: unknown): number | undefined {
   return typeof v === "number" && Number.isFinite(v) ? v : undefined;
 }
 
+const MAX_SOURCE_POINTS = 400;
+
+/** Downsample identifying series for localStorage. */
+export function downsampleSourceSeries(
+  time: number[],
+  velocity_mps: number[],
+  maxPts = MAX_SOURCE_POINTS
+): { time: number[]; velocity_mps: number[] } {
+  const n = Math.min(time.length, velocity_mps.length);
+  if (n <= maxPts) {
+    return {
+      time: time.slice(0, n),
+      velocity_mps: velocity_mps.slice(0, n),
+    };
+  }
+  const step = Math.max(1, Math.floor(n / maxPts));
+  const t: number[] = [];
+  const v: number[] = [];
+  for (let i = 0; i < n; i += step) {
+    t.push(time[i]);
+    v.push(velocity_mps[i]);
+  }
+  if (t[t.length - 1] !== time[n - 1]) {
+    t.push(time[n - 1]);
+    v.push(velocity_mps[n - 1]);
+  }
+  return { time: t, velocity_mps: v };
+}
+
+function normalizeSourceProfile(raw: unknown): SavedDriverSourceProfile | null {
+  if (!isRecord(raw)) return null;
+  const filename = typeof raw.filename === "string" ? raw.filename : "";
+  if (!filename) return null;
+  const fp = isRecord(raw.fingerprint) ? (raw.fingerprint as Record<string, number>) : {};
+  const time = Array.isArray(raw.time)
+    ? raw.time.filter((x): x is number => typeof x === "number" && Number.isFinite(x))
+    : [];
+  const velocity_mps = Array.isArray(raw.velocity_mps)
+    ? raw.velocity_mps.filter(
+        (x): x is number => typeof x === "number" && Number.isFinite(x)
+      )
+    : Array.isArray(raw.velocity)
+      ? (raw.velocity as unknown[]).filter(
+          (x): x is number => typeof x === "number" && Number.isFinite(x)
+        )
+      : [];
+  if (time.length < 2 || velocity_mps.length < 2) {
+    return {
+      filename,
+      fingerprint: fp,
+      time: [],
+      velocity_mps: [],
+      n_raw: asOptNum(raw.n_raw),
+    };
+  }
+  const ds = downsampleSourceSeries(time, velocity_mps);
+  return {
+    filename,
+    fingerprint: fp,
+    time: ds.time,
+    velocity_mps: ds.velocity_mps,
+    n_raw: asOptNum(raw.n_raw) ?? time.length,
+  };
+}
+
 function normalizePhysics(raw: unknown): DriverPhysics {
   if (!isRecord(raw)) {
     return completePhysics(null);
@@ -83,6 +165,9 @@ function normalizePhysics(raw: unknown): DriverPhysics {
     s0: asOptNum(raw.s0),
     jerk_max: asOptNum(raw.jerk_max),
     jerk_brake_max: asOptNum(raw.jerk_brake_max),
+    pedal_tau_s: asNum(raw.pedal_tau_s, 0),
+    vdes_tau_s: asNum(raw.vdes_tau_s, 0),
+    descent_hold_gain: asNum(raw.descent_hold_gain, 0),
   });
 }
 
@@ -114,6 +199,12 @@ function normalize(raw: unknown): SavedDriver | null {
       typeof raw.a_y === "number" && Number.isFinite(raw.a_y) ? raw.a_y : null,
     notes: typeof raw.notes === "string" ? raw.notes : undefined,
     seed: raw.seed === true || id.startsWith("seed-"),
+    tags: Array.isArray(raw.tags)
+      ? raw.tags.filter((t): t is string => typeof t === "string")
+      : undefined,
+    sourceSha256:
+      typeof raw.sourceSha256 === "string" ? raw.sourceSha256 : null,
+    sourceProfile: normalizeSourceProfile(raw.sourceProfile),
     createdAt,
     updatedAt,
   };
@@ -183,6 +274,11 @@ export function saveDriver(
       physics: completePhysics(input.physics),
       a_y: input.a_y ?? null,
       notes: input.notes,
+      tags: input.tags,
+      sourceSha256: input.sourceSha256 ?? null,
+      sourceProfile: input.sourceProfile
+        ? normalizeSourceProfile(input.sourceProfile)
+        : null,
       seed: false,
       createdAt: now,
       updatedAt: now,
@@ -200,6 +296,17 @@ export function saveDriver(
       physics: completePhysics(input.physics),
       a_y: input.a_y ?? null,
       notes: input.notes,
+      tags: input.tags ?? existing.tags,
+      sourceSha256:
+        input.sourceSha256 !== undefined
+          ? input.sourceSha256
+          : existing.sourceSha256,
+      sourceProfile:
+        input.sourceProfile !== undefined
+          ? input.sourceProfile
+            ? normalizeSourceProfile(input.sourceProfile)
+            : null
+          : existing.sourceProfile,
       updatedAt: now,
       seed: false,
     };
@@ -215,6 +322,11 @@ export function saveDriver(
     physics: completePhysics(input.physics),
     a_y: input.a_y ?? null,
     notes: input.notes,
+    tags: input.tags,
+    sourceSha256: input.sourceSha256 ?? null,
+    sourceProfile: input.sourceProfile
+      ? normalizeSourceProfile(input.sourceProfile)
+      : null,
     seed: false,
     createdAt: now,
     updatedAt: now,

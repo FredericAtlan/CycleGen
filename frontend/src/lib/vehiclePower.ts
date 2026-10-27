@@ -23,7 +23,7 @@ export type PowerSample = {
 
 const G = 9.80665;
 
-/** Treat as stopped wheel (EP-SIM: apply max brake torque). */
+/** Treat as stopped wheel (réf. énergie: apply max brake torque). */
 const V_WHEEL_STOP_MPS = 0.05; // ≈ 0.18 km/h
 
 /** WLTP-style road load: F = F0 + F1·v_kmh + F2·v_kmh² (N). */
@@ -46,7 +46,7 @@ export function roadLoadForceN(
  * τ = F_trac · r_dyn
  * ω_rpm = v / r_dyn · 60/(2π)
  *
- * Standstill rule (Grossglockner EP-SIM Space): if wheel speed ≈ 0 and
+ * Standstill rule (Grossglockner référence énergie): if wheel speed ≈ 0 and
  * τ_brake_max is set, τ_wheel = −τ_brake_max (P stays 0).
  */
 export function mechanicalPowerSample(args: {

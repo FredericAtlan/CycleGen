@@ -23,6 +23,8 @@ import {
   type SavedDriver,
 } from "@/lib/driverLibrary";
 import {
+  DRIVER_IDENTIFY_EXTRA_KEYS,
+  DRIVER_PHYSICS_UI_KEYS,
   identifyDriverFromProfile,
   type DriverMatch,
   type InferredDriverParams,
@@ -132,12 +134,19 @@ export default function SimParamsPanel({
   const [identifyFile, setIdentifyFile] = useState<string | null>(null);
   const [inferred, setInferred] = useState<InferredDriverParams | null>(null);
   const [matches, setMatches] = useState<DriverMatch[]>([]);
+  const [identifySeries, setIdentifySeries] = useState<{
+    time: number[];
+    velocity: number[];
+  } | null>(null);
   const identifyInputRef = useRef<HTMLInputElement | null>(null);
 
   const refreshLibrary = () => setLibrary(listDrivers());
   useEffect(() => {
     refreshLibrary();
   }, []);
+  useEffect(() => {
+    refreshLibrary();
+  }, [driverId]);
 
   const matched = matchUiPreset(physics, aY);
   const defaults = defaultDriverPhysics();
@@ -226,10 +235,12 @@ export default function SimParamsPanel({
         parsed.velocity
       );
       setInferred(inf);
+      setIdentifySeries({ time: parsed.time, velocity: parsed.velocity });
       setMatches(m.slice(0, 5));
       refreshLibrary();
     } catch (e) {
       setInferred(null);
+      setIdentifySeries(null);
       setMatches([]);
       setIdentifyErr(e instanceof Error ? e.message : "Échec d’analyse");
     } finally {
@@ -242,6 +253,8 @@ export default function SimParamsPanel({
     if (!inferred) return;
     onDriverProfileChange(inferred.baseProfile);
     onPhysicsChange({ ...inferred.physics });
+    onAYChange(inferred.a_y);
+    onMaxSpeedKmhChange(inferred.maxSpeedKmh);
     onDriverIdChange?.(null);
   };
 
@@ -249,24 +262,71 @@ export default function SimParamsPanel({
     applyLibraryDriver(m.driver.id);
   };
 
+  const patchInferredPhysics = (key: keyof DriverPhysics, raw: string) => {
+    if (!inferred) return;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return;
+    setInferred({
+      ...inferred,
+      physics: { ...inferred.physics, [key]: n },
+    });
+  };
+
+  const patchInferredExtra = (key: "a_y" | "maxSpeedKmh", raw: string) => {
+    if (!inferred) return;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return;
+    setInferred({ ...inferred, [key]: n });
+  };
+
   const saveInferredAsDriver = () => {
     if (!inferred) return;
     const name =
       saveName.trim() ||
       `Identifié · ${identifyFile?.replace(/\.[^.]+$/, "") || inferred.baseProfile}`;
+    const fp = inferred.fingerprint;
+    const fingerprint: Record<string, number> = {
+      duration_s: fp.duration_s,
+      distance_m: fp.distance_m,
+      v_mean_mps: fp.v_mean_mps,
+      v_max_mps: fp.v_max_mps,
+      mean_abs_accel: fp.mean_abs_accel,
+      p95_accel: fp.p95_accel,
+      p95_decel: fp.p95_decel,
+      p95_abs_accel: fp.p95_abs_accel,
+      p85_accel: fp.p85_accel,
+      p85_decel: fp.p85_decel,
+      jerk_pos_p85: fp.jerk_pos_p85,
+      jerk_neg_p85: fp.jerk_neg_p85,
+      pedal_tau_est: fp.pedal_tau_est,
+      vdes_tau_est: fp.vdes_tau_est,
+      descent_hold_est: fp.descent_hold_est,
+      rpa: fp.rpa,
+      stop_ratio: fp.stop_ratio,
+      stops: fp.stops,
+    };
     const saved = saveDriver({
       name,
       baseProfile: inferred.baseProfile,
       physics: { ...inferred.physics },
-      a_y: aY,
+      a_y: inferred.a_y,
       notes: identifyFile
         ? `Identifié depuis ${identifyFile}`
         : "Identifié depuis profil v(t)",
+      sourceProfile: {
+        filename: identifyFile || "profil.csv",
+        fingerprint,
+        time: identifySeries?.time ?? [],
+        velocity_mps: identifySeries?.velocity ?? [],
+        n_raw: identifySeries?.time.length,
+      },
     });
     refreshLibrary();
     onDriverIdChange?.(saved.id);
     onDriverProfileChange(saved.baseProfile);
     onPhysicsChange({ ...saved.physics });
+    onAYChange(inferred.a_y);
+    onMaxSpeedKmhChange(inferred.maxSpeedKmh);
     setSaveName("");
   };
 
@@ -315,6 +375,7 @@ export default function SimParamsPanel({
             onChange={(e) => {
               const id = e.target.value;
               if (id) applyLibraryDriver(id);
+              else onDriverIdChange?.(null);
             }}
             className="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-900 outline-none focus:border-brand disabled:opacity-60"
           >
@@ -472,9 +533,6 @@ export default function SimParamsPanel({
               <p className="text-[10px] text-slate-600">
                 Estimé · base{" "}
                 <strong className="text-slate-900">{inferred.baseProfile}</strong>
-                {" · "}
-                a={inferred.physics.a_max} · b={inferred.physics.b_comf} · sf=
-                {inferred.physics.speed_factor}
                 {identifyFile ? (
                   <span className="text-slate-400"> · {identifyFile}</span>
                 ) : null}
@@ -482,8 +540,75 @@ export default function SimParamsPanel({
               <p className="text-[10px] tabular-nums text-slate-500">
                 v̄ {(inferred.fingerprint.v_mean_mps * 3.6).toFixed(0)} km/h ·
                 p95 a+ {inferred.fingerprint.p95_accel.toFixed(2)} · p95 a−{" "}
-                {inferred.fingerprint.p95_decel.toFixed(2)} · RPA{" "}
+                {inferred.fingerprint.p95_decel.toFixed(2)} · jerk+{" "}
+                {inferred.fingerprint.jerk_pos_p85.toFixed(2)} · RPA{" "}
                 {inferred.fingerprint.rpa.toFixed(2)}
+              </p>
+              <dl className="grid grid-cols-2 gap-x-2 gap-y-0.5 rounded border border-slate-100 bg-slate-50/80 px-1.5 py-1 font-mono text-[10px] tabular-nums text-slate-700">
+                {DRIVER_PHYSICS_UI_KEYS.map(
+                  ({ key, label, unit, digits, step }) => {
+                    const v = inferred.physics[key] ?? 0;
+                    const d = digits ?? 2;
+                    return (
+                      <label
+                        key={key}
+                        className="flex items-baseline justify-between gap-1"
+                      >
+                        <span className="text-slate-400">{label}</span>
+                        <span className="inline-flex items-baseline gap-0.5">
+                          <input
+                            type="number"
+                            step={step ?? 0.01}
+                            disabled={disabled}
+                            value={Number(v.toFixed(d))}
+                            onChange={(e) =>
+                              patchInferredPhysics(key, e.target.value)
+                            }
+                            className="w-[4.25rem] border-0 bg-transparent text-right font-mono text-[10px] font-semibold text-slate-900 outline-none disabled:opacity-50"
+                          />
+                          {unit ? (
+                            <span className="font-sans font-normal text-slate-400">
+                              {unit}
+                            </span>
+                          ) : null}
+                        </span>
+                      </label>
+                    );
+                  }
+                )}
+                {DRIVER_IDENTIFY_EXTRA_KEYS.map(
+                  ({ key, label, unit, step, digits }) => {
+                    const v = inferred[key];
+                    const d = digits ?? 2;
+                    return (
+                      <label
+                        key={key}
+                        className="flex items-baseline justify-between gap-1"
+                      >
+                        <span className="text-slate-400">{label}</span>
+                        <span className="inline-flex items-baseline gap-0.5">
+                          <input
+                            type="number"
+                            step={step}
+                            disabled={disabled}
+                            value={Number(v.toFixed(d))}
+                            onChange={(e) =>
+                              patchInferredExtra(key, e.target.value)
+                            }
+                            className="w-[4.25rem] border-0 bg-transparent text-right font-mono text-[10px] font-semibold text-slate-900 outline-none disabled:opacity-50"
+                          />
+                          <span className="font-sans font-normal text-slate-400">
+                            {unit}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  }
+                )}
+              </dl>
+              <p className="text-[9px] leading-snug text-slate-400">
+                13 paramètres estimés (physique + a_y + Vmax) — éditables avant
+                application.
               </p>
               <div className="flex flex-wrap gap-1">
                 <button
@@ -511,13 +636,18 @@ export default function SimParamsPanel({
                   {matches.map((m) => (
                     <li
                       key={m.driver.id}
-                      className="flex items-center justify-between gap-2 text-[10px]"
+                      className="flex items-start justify-between gap-2 text-[10px]"
                     >
-                      <span className="min-w-0 truncate text-slate-700">
+                      <span className="min-w-0 text-slate-700">
                         <strong className="tabular-nums text-slate-900">
                           {m.score}%
                         </strong>{" "}
                         {driverLabel(m.driver)}
+                        <span className="mt-0.5 block truncate font-mono text-[9px] tabular-nums text-slate-400">
+                          Δ a={m.delta.a_max} · b={m.delta.b_comf} · τ=
+                          {m.delta.pedal_tau_s} · hold=
+                          {m.delta.descent_hold_gain}
+                        </span>
                       </span>
                       <button
                         type="button"
@@ -690,6 +820,48 @@ export default function SimParamsPanel({
               onAYChange(v);
               onDriverIdChange?.(null);
             }}
+          />
+        </div>
+
+        <div className="space-y-2.5 border-t border-slate-100 pt-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            4 · Filtre 1er ordre & retention
+          </p>
+          <SliderField
+            label="pedal_τ"
+            unit="s"
+            value={physics.pedal_tau_s}
+            step={0.1}
+            min={0}
+            max={10}
+            disabled={disabled}
+            doc={DRIVER_UI_DOCS.pedal_tau_s}
+            format={(n) => n.toFixed(1)}
+            onChange={(pedal_tau_s) => patchPhysics({ pedal_tau_s })}
+          />
+          <SliderField
+            label="vdes_τ"
+            unit="s"
+            value={physics.vdes_tau_s}
+            step={0.1}
+            min={0}
+            max={10}
+            disabled={disabled}
+            doc={DRIVER_UI_DOCS.vdes_tau_s}
+            format={(n) => n.toFixed(1)}
+            onChange={(vdes_tau_s) => patchPhysics({ vdes_tau_s })}
+          />
+          <SliderField
+            label="hold"
+            unit="—"
+            value={physics.descent_hold_gain}
+            step={0.1}
+            min={0}
+            max={10}
+            disabled={disabled}
+            doc={DRIVER_UI_DOCS.descent_hold_gain}
+            format={(n) => n.toFixed(1)}
+            onChange={(descent_hold_gain) => patchPhysics({ descent_hold_gain })}
           />
         </div>
       </div>

@@ -66,20 +66,38 @@ export default function MapCameraControls({
 
   return (
     <div className="pointer-events-auto absolute right-3 top-3 z-[1000] flex max-w-[200px] flex-col items-end gap-1">
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls="map-menus-panel"
-        onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white/95 text-slate-700 shadow-sm transition hover:bg-white active:scale-[0.98]"
-        title={
-          open
-            ? "Replier les menus carte"
-            : `Déplier les menus carte${activeHints.length ? ` (${activeHints.join(", ")})` : ""}`
-        }
-      >
-        <IconLayers />
-      </button>
+      <div className="flex items-center gap-1">
+        {hasLoupe && onLoupeOpenChange ? (
+          <button
+            type="button"
+            data-testid="map-loupe-toggle"
+            aria-pressed={loupeOpen}
+            onClick={() => onLoupeOpenChange(!loupeOpen)}
+            className={`inline-flex h-8 items-center gap-1 rounded-md border px-2 text-[10px] font-semibold shadow-sm transition active:scale-[0.98] ${
+              loupeOpen
+                ? "border-brand bg-brand/10 text-brand"
+                : "border-slate-200 bg-white/95 text-slate-700 hover:bg-white"
+            }`}
+            title="Vue 3D de la route + profil de pente sous la carte"
+          >
+            Loupe 3D
+          </button>
+        ) : null}
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls="map-menus-panel"
+          onClick={() => setOpen((v) => !v)}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white/95 text-slate-700 shadow-sm transition hover:bg-white active:scale-[0.98]"
+          title={
+            open
+              ? "Replier les menus carte"
+              : `Déplier les menus carte${activeHints.length ? ` (${activeHints.join(", ")})` : ""}`
+          }
+        >
+          <IconLayers />
+        </button>
+      </div>
 
       {open && (
         <div

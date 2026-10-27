@@ -33,6 +33,8 @@ export type CycleParamsSnapshot = {
   driverZones: CycleZoneSnap[] | null;
   preferredEngine: SimEngine;
   feux: CycleFeuxSnap[];
+  /** Stochastic Markov a_noise. */
+  enableMarkov: boolean;
 };
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -56,6 +58,15 @@ function asPhysics(v: unknown): DriverPhysics | null {
       : undefined,
     jerk_brake_max: Number.isFinite(Number(o.jerk_brake_max))
       ? round3(Number(o.jerk_brake_max))
+      : undefined,
+    pedal_tau_s: Number.isFinite(Number(o.pedal_tau_s))
+      ? round3(Number(o.pedal_tau_s))
+      : undefined,
+    vdes_tau_s: Number.isFinite(Number(o.vdes_tau_s))
+      ? round3(Number(o.vdes_tau_s))
+      : undefined,
+    descent_hold_gain: Number.isFinite(Number(o.descent_hold_gain))
+      ? round3(Number(o.descent_hold_gain))
       : undefined,
   });
 }
@@ -139,6 +150,7 @@ export function coerceCycleParamsSnapshot(
       driverZones: asZones(o.driverZones),
       preferredEngine: (o.preferredEngine as SimEngine) ?? "idm",
       feux: asFeux(o.feux),
+      enableMarkov: !!o.enableMarkov,
     };
   }
 
@@ -174,6 +186,7 @@ export function coerceCycleParamsSnapshot(
     ),
     preferredEngine: (o.preferredEngine as SimEngine) ?? "idm",
     feux: asFeux(o.feux),
+    enableMarkov: !!o.enableMarkov,
   };
 }
 
@@ -196,6 +209,7 @@ export function buildCycleParamsSnapshot(args: {
   }[];
   preferredEngine: SimEngine;
   feux: CycleFeuxSnap[];
+  enableMarkov?: boolean;
 }): CycleParamsSnapshot {
   const zones =
     args.driverZonesEnabled && args.driverZones.length
@@ -229,12 +243,16 @@ export function buildCycleParamsSnapshot(args: {
       s0: round3(args.physics.s0),
       jerk_max: round3(args.physics.jerk_max),
       jerk_brake_max: round3(args.physics.jerk_brake_max),
+      pedal_tau_s: round3(args.physics.pedal_tau_s),
+      vdes_tau_s: round3(args.physics.vdes_tau_s),
+      descent_hold_gain: round3(args.physics.descent_hold_gain),
     }),
     maxSpeedKmh: args.maxSpeedKmh,
     driverProfile: args.driverProfile,
     driverZones: zones,
     preferredEngine: args.preferredEngine,
     feux: args.feux,
+    enableMarkov: !!args.enableMarkov,
   };
 }
 
@@ -414,6 +432,24 @@ export function diffCycleParamsLines(
     `${fmtNum(before.physics?.jerk_brake_max ?? NaN, 2)} m/s³`,
     `${fmtNum(after.physics.jerk_brake_max, 2)} m/s³`
   );
+  pushChange(
+    lines,
+    "pedal_τ",
+    `${fmtNum(before.physics?.pedal_tau_s ?? NaN, 2)} s`,
+    `${fmtNum(after.physics.pedal_tau_s, 2)} s`
+  );
+  pushChange(
+    lines,
+    "vdes_τ",
+    `${fmtNum(before.physics?.vdes_tau_s ?? NaN, 2)} s`,
+    `${fmtNum(after.physics.vdes_tau_s, 2)} s`
+  );
+  pushChange(
+    lines,
+    "hold",
+    fmtNum(before.physics?.descent_hold_gain ?? NaN, 2),
+    fmtNum(after.physics.descent_hold_gain, 2)
+  );
 
   pushChange(
     lines,
@@ -441,6 +477,13 @@ export function diffCycleParamsLines(
     "Moteur",
     String(before.preferredEngine ?? "—").toUpperCase(),
     String(after.preferredEngine).toUpperCase()
+  );
+
+  pushChange(
+    lines,
+    "Markov a_noise",
+    fmtOnOff(!!before.enableMarkov),
+    fmtOnOff(!!after.enableMarkov)
   );
 
   const bf = JSON.stringify(before.feux ?? []);

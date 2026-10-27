@@ -21,7 +21,6 @@ import { TIME_X_AXIS_PROPS, formatTimeLabel } from "@/lib/chartTime";
 import type { DriverPhysics } from "@/lib/driverPresets";
 import {
   compareModeById,
-  computeClientProfileKpis,
   type ClientProfileKpis,
   type CompareMode,
 } from "@/lib/scenarios";

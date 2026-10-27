@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import AppHeader from "@/components/AppHeader";
 import HelpDrawer from "@/components/HelpDrawer";
 import { HelpProvider } from "@/components/HelpContext";
@@ -24,7 +24,13 @@ export default function AppChrome({ children }: { children: ReactNode }) {
         <GlobalWarningsProvider>
           <ApiConsoleProvider>
             <div className="relative flex h-dvh flex-col overflow-hidden bg-slate-100">
-              <AppHeader />
+              <Suspense
+                fallback={
+                  <div className="h-12 shrink-0 border-b border-slate-200 bg-white" />
+                }
+              >
+                <AppHeader />
+              </Suspense>
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 {children}
               </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  RENAULT_GROSSGLOCKNER_ZONES,
+  GROSSGLOCKNER_DEFAULT_ZONES,
   normalizeZones,
   type DriverZone,
 } from "@/lib/driverZones";
@@ -141,12 +141,12 @@ export default function DriverZonesEditor({
               type="button"
               disabled={disabled}
               onClick={() =>
-                onZonesChange(normalizeZones(RENAULT_GROSSGLOCKNER_ZONES))
+                onZonesChange(normalizeZones(GROSSGLOCKNER_DEFAULT_ZONES))
               }
               className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-700 hover:bg-white disabled:opacity-40"
-              title="Charger les 2 zones Renault Grossglockner (Test) — zone 2 à 1116 m"
+              title="Charger les 2 zones Grossglockner (Test) — zone 2 à 1116 m"
             >
-              Preset Renault GG
+              Preset OEM GG
             </button>
             <button
               type="button"

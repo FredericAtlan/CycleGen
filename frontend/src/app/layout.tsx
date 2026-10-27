@@ -19,6 +19,13 @@ export const metadata: Metadata = {
   title: `CycleGen v${APP_VERSION} — ${APP_AUTHOR}`,
   description: `CycleGen by ${APP_AUTHOR} — synthetic automotive driving-cycle studio (route, cycle, simulation, export).`,
   authors: [{ name: APP_AUTHOR }],
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.png", type: "image/png", sizes: "192x192" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+  },
 };
 
 export default function RootLayout({

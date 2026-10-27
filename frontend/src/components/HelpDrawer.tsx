@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import DOMPurify from "isomorphic-dompurify";
+import { useEffect, useMemo, useRef, useState } from "react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import { useHelp } from "@/components/HelpContext";
@@ -194,48 +195,49 @@ function renderMarkdown(md: string): string {
     .replace(SLOT_RE, (_m, i: string) => slots[Number(i)] ?? "");
 }
 
+/** Allow KaTeX / markdown output while stripping scripts and unsafe URLs. */
+function sanitizeHelpHtml(html: string): string {
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true, svg: true, mathMl: true },
+    ADD_ATTR: ["target", "class", "xmlns", "aria-hidden", "role"],
+  });
+}
+
 const TABS: { id: HelpTab; label: string }[] = [
   { id: "step", label: "Étape" },
   { id: "architecture", label: "Architecture" },
   { id: "science", label: "Science" },
 ];
 
-export default function HelpDrawer() {
-  const { open, closeHelp, tab, setTab, studioStep, setStudioStep } = useHelp();
-  const [scienceId, setScienceId] = useState("readme");
+function resolveHelpDocUrl(
+  tab: HelpTab,
+  studioStep: StudioWizardStep,
+  scienceId: string
+): string | null {
+  if (tab === "step") {
+    return stepHelpUrl(stepHelpFor(studioStep).file);
+  }
+  if (tab === "architecture") {
+    return stepHelpUrl(ARCHITECTURE_HELP.file);
+  }
+  if (tab === "ide") {
+    // Banc d'essai retiré — renvoyer l'aide architecture
+    return stepHelpUrl(ARCHITECTURE_HELP.file);
+  }
+  const meta: ScienceDocMeta | undefined = SCIENCE_DOCS.find(
+    (d) => d.id === scienceId
+  );
+  return meta ? scienceDocUrl(meta.file) : null;
+}
+
+function HelpMarkdownPane({ url }: { url: string }) {
   const [body, setBody] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const panelRef = useRef<HTMLElement | null>(null);
-  useFocusTrap(open, panelRef);
+  const safeBody = useMemo(() => sanitizeHelpHtml(body), [body]);
 
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeHelp();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, closeHelp]);
-
-  useEffect(() => {
-    if (!open) return;
-    let url: string | null = null;
-    if (tab === "step") {
-      url = stepHelpUrl(stepHelpFor(studioStep).file);
-    } else if (tab === "architecture") {
-      url = stepHelpUrl(ARCHITECTURE_HELP.file);
-    } else {
-      const meta: ScienceDocMeta | undefined = SCIENCE_DOCS.find(
-        (d) => d.id === scienceId
-      );
-      if (meta) url = scienceDocUrl(meta.file);
-    }
-    if (!url) return;
-
     let cancelled = false;
-    setLoading(true);
-    setError(null);
     fetch(url)
       .then(async (res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -254,7 +256,37 @@ export default function HelpDrawer() {
     return () => {
       cancelled = true;
     };
-  }, [open, tab, studioStep, scienceId]);
+  }, [url]);
+
+  if (loading) {
+    return <p className="text-sm text-slate-600">Chargement…</p>;
+  }
+  if (error) {
+    return <p className="text-sm text-red-600">Erreur : {error}</p>;
+  }
+  return (
+    <div
+      className="help-md"
+      dangerouslySetInnerHTML={{ __html: safeBody }}
+    />
+  );
+}
+
+export default function HelpDrawer() {
+  const { open, closeHelp, tab, setTab, studioStep, setStudioStep } = useHelp();
+  const [scienceId, setScienceId] = useState("readme");
+  const panelRef = useRef<HTMLElement | null>(null);
+  const docUrl = open ? resolveHelpDocUrl(tab, studioStep, scienceId) : null;
+  useFocusTrap(open, panelRef);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeHelp();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, closeHelp]);
 
   if (!open) return null;
 
@@ -288,7 +320,7 @@ export default function HelpDrawer() {
             <p className="truncate text-[11px] text-slate-500">
               {tab === "step"
                 ? `Étape ${studioStep} · ${STUDIO_WIZARD_LABELS[studioStep]}`
-                : tab === "architecture"
+                : tab === "architecture" || tab === "ide"
                   ? ARCHITECTURE_HELP.summary
                   : "Fiches scientifiques détaillées"}
             </p>
@@ -366,14 +398,7 @@ export default function HelpDrawer() {
           )}
 
           <div className="min-h-0 flex-1 overflow-y-auto bg-white px-5 py-4">
-            {loading && <p className="text-sm text-slate-600">Chargement…</p>}
-            {error && <p className="text-sm text-red-600">Erreur : {error}</p>}
-            {!loading && !error && (
-              <div
-                className="help-md"
-                dangerouslySetInnerHTML={{ __html: body }}
-              />
-            )}
+            {docUrl ? <HelpMarkdownPane key={docUrl} url={docUrl} /> : null}
           </div>
         </div>
       </aside>

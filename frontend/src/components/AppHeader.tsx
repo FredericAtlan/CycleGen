@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import CycleGenLogo from "@/components/CycleGenLogo";
 import { useHelpOptional } from "@/components/HelpContext";
 import WarningsBell from "@/components/WarningsBell";
@@ -72,6 +72,7 @@ function VersusControls({ chrome }: { chrome: VersusHeaderChrome }) {
 
 export default function AppHeader() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const help = useHelpOptional();
   const apiConsole = useApiConsoleOptional();
   const headerChrome = useHeaderChromeOptional();
@@ -120,15 +121,11 @@ export default function AppHeader() {
   }, [help]);
 
   const versus = mounted && (pathname?.startsWith("/compare") ?? false);
-  const [libActive, setLibActive] = useState(false);
-  const [createActive, setCreateActive] = useState(false);
-  useEffect(() => {
-    if (!mounted || typeof window === "undefined") return;
-    const sp = new URLSearchParams(window.location.search);
-    const mode = sp.get("mode");
-    setLibActive(!versus && mode === "library");
-    setCreateActive(!versus && mode === "create");
-  }, [mounted, pathname, versus]);
+  const mode = searchParams.get("mode");
+  const libActive = mounted && !versus && mode === "library";
+  const createActive =
+    mounted && !versus && (mode === "create" || mode === "ide");
+  const driverActive = mounted && !versus && mode === "driver";
 
   const linkClass = (active: boolean) =>
     `rounded-md px-2.5 py-1.5 text-xs font-semibold sm:px-3 ${
@@ -139,7 +136,13 @@ export default function AppHeader() {
 
   const createHref = "/?mode=create";
   const showMenu = chrome?.kind === "studio";
-  const homeActive = mounted && !versus && !libActive && !createActive && !showMenu;
+  const homeActive =
+    mounted &&
+    !versus &&
+    !libActive &&
+    !createActive &&
+    !driverActive &&
+    !showMenu;
 
   return (
     <header
@@ -211,6 +214,13 @@ export default function AppHeader() {
           ) : null}
         </Link>
         <Link
+          href="/?mode=driver"
+          className={linkClass(driverActive)}
+          title="Créer un conducteur depuis des traces"
+        >
+          Conducteur
+        </Link>
+        <Link
           href="/?mode=library"
           className={linkClass(libActive)}
           title="Bibliothèque de cycles"
@@ -230,7 +240,9 @@ export default function AppHeader() {
         ) : null}
       </nav>
 
-      {chrome?.kind === "versus" && <VersusControls chrome={chrome} />}
+      {mounted && chrome?.kind === "versus" ? (
+        <VersusControls chrome={chrome} />
+      ) : null}
 
       <div className="relative flex shrink-0 items-center gap-1" data-plus-menu>
         <div className="relative">

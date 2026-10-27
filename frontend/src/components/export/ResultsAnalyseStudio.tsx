@@ -1222,7 +1222,8 @@ export default function ResultsAnalyseStudio({
     noGps,
   ]);
 
-  const addCursorAt = (_t: number) => {
+  const addCursorAt = (_unusedT: number) => {
+    void _unusedT;
     /* cursors retirés — zoom Zone X / Y à la place */
   };
 

@@ -14,8 +14,8 @@ export type DriverZone = {
   a_y?: number | null;
 };
 
-/** Renault Grossglockner Route Planner — Test limits (Summery sheet). */
-export const RENAULT_GROSSGLOCKNER_ZONES: DriverZone[] = [
+/** Grossglockner Route Planner — Test limits (Summery sheet). */
+export const GROSSGLOCKNER_DEFAULT_ZONES: DriverZone[] = [
   {
     id: "z1",
     label: "1st Part",
@@ -34,7 +34,7 @@ export const RENAULT_GROSSGLOCKNER_ZONES: DriverZone[] = [
   },
 ];
 
-export const RENAULT_GROSSGLOCKNER_ZONE2_S0_M = 1116;
+export const OEM_GROSSGLOCKNER_ZONE2_S0_M = 1116;
 
 export function zoneAtS(zones: DriverZone[], s_m: number): DriverZone | null {
   if (!zones.length) return null;
