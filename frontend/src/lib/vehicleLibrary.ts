@@ -55,14 +55,26 @@ export type VehicleCard = {
 };
 
 /**
- * Seed catalog: OEM Renault (user) + BEV engineering proxies.
- * Official CoC F0/F1/F2 are rarely public — proxies are labeled as such.
+ * Seed catalog — 3 véhicules retenus : C-Space, Grossglockner (X-Space), BCB.
  */
+/** Default OEM vehicle when none selected / boot snapshot missing. */
+export const DEFAULT_VEHICLE_ID = "renault-xspace-apr2bis";
+
+/** Former seed ids purged on library merge (proxies BEV retirés). */
+const RETIRED_SEED_IDS = new Set([
+  "seed-zoe-bev",
+  "seed-leaf-bev",
+  "seed-id3-bev",
+  "seed-model3-bev",
+  "seed-ioniq5-bev",
+  "seed-bev-tm",
+]);
+
 const SEED: VehicleCard[] = [
   {
     id: "renault-cspace-leapfrog-apr2bis",
-    code: "C-SPACE / Leapfrog",
-    name: "C-Space / Leapfrog",
+    code: "C-Space",
+    name: "C-Space",
     massCode: "TM",
     mass_kg: 2034,
     f0_n: 125.5,
@@ -73,7 +85,7 @@ const SEED: VehicleCard[] = [
     power_kw: null,
     powertrain: "bev",
     milestone: "APR2 bis",
-    notes: "Road load constructeur — milestone APR2 bis.",
+    notes: "Road load constructeur — milestone APR2 bis (Leapfrog).",
     source: "Renault · APR2 bis",
   },
   {
@@ -92,7 +104,7 @@ const SEED: VehicleCard[] = [
     powertrain: "bev",
     milestone: "APR2 bis",
     notes:
-      "Road load constructeur — milestone APR2 bis. r_dyn=0.356 m (EP-SIM Space). τ_brake_max=10 kN·m à roue arrêtée (Grossglockner EP-SIM).",
+      "Road load constructeur — milestone APR2 bis. r_dyn=0.356 m (EP-SIM Space / X-Space). τ_brake_max=10 kN·m à roue arrêtée.",
     source: "Renault · APR2 bis · EP-SIM Space",
   },
   {
@@ -120,104 +132,6 @@ const SEED: VehicleCard[] = [
     notes:
       "AVL CRUISE — epwt 160 kW / 60 kWh. Coast-down F0/F1/F2 + body/tyre from Vehicle Data. r_dyn = Ø/2 = 0,34 m.",
     source: "AVL CRUISE · Vehicle Data BCB",
-  },
-  {
-    id: "seed-zoe-bev",
-    code: "ZOE-R135",
-    name: "Renault Zoé R135 (proxy ingénierie)",
-    massCode: "TM",
-    mass_kg: 1575,
-    f0_n: 118,
-    f1_n_per_kph: 0.42,
-    f2_n_per_kph2: 0.029,
-    r_dyn_m: 0.312,
-    v_max_kmh: 140,
-    power_kw: 100,
-    powertrain: "bev",
-    notes:
-      "Proxy CycleGen — F0/F1/F2 non officiels (ordre de grandeur BEV citadin).",
-    source: "CycleGen · proxy BEV public",
-  },
-  {
-    id: "seed-leaf-bev",
-    code: "LEAF-40",
-    name: "Nissan Leaf 40 kWh (proxy ingénierie)",
-    massCode: "TM",
-    mass_kg: 1580,
-    f0_n: 120,
-    f1_n_per_kph: 0.55,
-    f2_n_per_kph2: 0.032,
-    r_dyn_m: 0.316,
-    v_max_kmh: 144,
-    power_kw: 110,
-    powertrain: "bev",
-    notes: "Proxy CycleGen — coast-down type BEV compact.",
-    source: "CycleGen · proxy BEV public",
-  },
-  {
-    id: "seed-id3-bev",
-    code: "ID3-58",
-    name: "Volkswagen ID.3 Pro (proxy ingénierie)",
-    massCode: "TM",
-    mass_kg: 1810,
-    f0_n: 127.3,
-    f1_n_per_kph: 0.83,
-    f2_n_per_kph2: 0.0253,
-    r_dyn_m: 0.33,
-    v_max_kmh: 160,
-    power_kw: 150,
-    powertrain: "bev",
-    notes:
-      "Ordre de grandeur issu d’analyses open (ex. RLC dérivés) — pas un CoC.",
-    source: "CycleGen · proxy BEV (littérature open)",
-  },
-  {
-    id: "seed-model3-bev",
-    code: "M3-RWD",
-    name: "Tesla Model 3 RWD (proxy ingénierie)",
-    massCode: "TM",
-    mass_kg: 1760,
-    f0_n: 115,
-    f1_n_per_kph: 0.35,
-    f2_n_per_kph2: 0.024,
-    r_dyn_m: 0.335,
-    v_max_kmh: 225,
-    power_kw: 208,
-    powertrain: "bev",
-    notes: "Proxy CycleGen — Cx bas typique berline BEV.",
-    source: "CycleGen · proxy BEV public",
-  },
-  {
-    id: "seed-ioniq5-bev",
-    code: "IONIQ5",
-    name: "Hyundai Ioniq 5 (proxy ingénierie)",
-    massCode: "TM",
-    mass_kg: 2020,
-    f0_n: 135,
-    f1_n_per_kph: 0.6,
-    f2_n_per_kph2: 0.036,
-    r_dyn_m: 0.34,
-    v_max_kmh: 185,
-    power_kw: 160,
-    powertrain: "bev",
-    notes: "Proxy CycleGen — SUV/crossover BEV.",
-    source: "CycleGen · proxy BEV public",
-  },
-  {
-    id: "seed-bev-tm",
-    code: "BEV-C-TM",
-    name: "BEV compact — masse d’essai type",
-    massCode: "TM",
-    mass_kg: 1810,
-    f0_n: 102,
-    f1_n_per_kph: 0.48,
-    f2_n_per_kph2: 0.028,
-    r_dyn_m: 0.322,
-    v_max_kmh: 160,
-    power_kw: 150,
-    powertrain: "bev",
-    notes: "Seed générique CycleGen.",
-    source: "CycleGen seed",
   },
 ];
 
@@ -310,7 +224,12 @@ function normalize(raw: unknown): VehicleCard | null {
 function mergeSeeds(stored: VehicleCard[]): VehicleCard[] {
   // Seed OEM cards always win (keeps r_dyn / τ_brake updates); user extras kept.
   const seedIds = new Set(SEED.map((s) => s.id));
-  return [...SEED, ...stored.filter((v) => !seedIds.has(v.id))];
+  return [
+    ...SEED,
+    ...stored.filter(
+      (v) => !seedIds.has(v.id) && !RETIRED_SEED_IDS.has(v.id)
+    ),
+  ];
 }
 
 function readAll(): VehicleCard[] {

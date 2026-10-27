@@ -28,14 +28,8 @@ import type { BenchmarkSourceMeta, ConsolidatedProfile } from "@/lib/types";
 import type { SlopeUnit } from "@/lib/units";
 import { getVehicle, type VehicleCard } from "@/lib/vehicleLibrary";
 
-function defaultVehicleForCorpus(corpusId: string | null | undefined): string {
-  if (
-    corpusId &&
-    (corpusId.includes("epsim") || corpusId.includes("xspace"))
-  ) {
-    return "renault-xspace-apr2bis";
-  }
-  return "renault-cspace-leapfrog-apr2bis";
+function defaultVehicleForCorpus(_corpusId?: string | null): string {
+  return "renault-xspace-apr2bis";
 }
 
 async function cycleFromCorpus(
@@ -138,7 +132,14 @@ export default function EnergyStudyStudio() {
         if (!cancelled) {
           const list = Array.isArray(sources) ? sources : [];
           setCorpusList(
-            list.filter((s) => !s.has_geo && (s.n_points ?? 0) > 1)
+            list.filter(
+              (s) =>
+                !s.has_geo &&
+                (s.n_points ?? 0) > 1 &&
+                (s.family || "").toLowerCase() !== "xspace_avl" &&
+                !/xspace/i.test(s.id) &&
+                !/xspace/i.test(s.name || "")
+            )
           );
         }
       } catch {
@@ -152,6 +153,9 @@ export default function EnergyStudyStudio() {
 
       try {
         if (corpusQ) {
+          if (/xspace/i.test(corpusQ)) {
+            throw new Error("Roulage XSPACE retiré de la bibliothèque");
+          }
           const sources = await listBenchmarkSources().catch(() => [] as BenchmarkSourceMeta[]);
           const list = Array.isArray(sources) ? sources : [];
           const hit = list.find((s) => s.id === corpusQ);
@@ -162,6 +166,9 @@ export default function EnergyStudyStudio() {
             takeEnergyOpen();
           }
         } else if (savedQ) {
+          if (/xspace/i.test(savedQ)) {
+            throw new Error("Roulage XSPACE retiré de la bibliothèque");
+          }
           const c = getSavedCycle(savedQ);
           if (!c) throw new Error("Cycle introuvable dans la bibliothèque");
           if (!cancelled) {
@@ -169,6 +176,9 @@ export default function EnergyStudyStudio() {
             takeEnergyOpen();
           }
         } else if (stashed?.kind === "corpus") {
+          if (/xspace/i.test(stashed.corpusId)) {
+            throw new Error("Roulage XSPACE retiré de la bibliothèque");
+          }
           const sources = await listBenchmarkSources().catch(() => [] as BenchmarkSourceMeta[]);
           const list = Array.isArray(sources) ? sources : [];
           const hit = list.find((s) => s.id === stashed.corpusId);
@@ -179,6 +189,9 @@ export default function EnergyStudyStudio() {
             takeEnergyOpen();
           }
         } else if (stashed?.kind === "saved") {
+          if (/xspace/i.test(stashed.cycleId)) {
+            throw new Error("Roulage XSPACE retiré de la bibliothèque");
+          }
           const c = getSavedCycle(stashed.cycleId);
           if (!c) throw new Error("Cycle introuvable dans la bibliothèque");
           if (!cancelled) {
@@ -299,14 +312,16 @@ export default function EnergyStudyStudio() {
               onClick={() => {
                 setLoading(true);
                 setError("");
-                void cycleFromCorpus({
-                  id: "epsim_xspace_grossglockner",
-                  name: "Grossglockner — descente alpine (v/pente)",
-                  source: "oem",
-                  family: "oem",
-                  url: null,
-                })
-                  .then((c) => applyCycle(c, "renault-xspace-apr2bis"))
+                void (async () => {
+                  await ensureRouteStudioFitPack().catch(() => undefined);
+                  const c = getSavedCycle("rs_here_grossglockner_prudent");
+                  if (!c) {
+                    throw new Error(
+                      "Grossglockner introuvable — chargez le pack bibliothèque"
+                    );
+                  }
+                  applyCycle(c, "renault-xspace-apr2bis");
+                })()
                   .catch((e) =>
                     setError(
                       e instanceof Error
@@ -317,7 +332,7 @@ export default function EnergyStudyStudio() {
                   .finally(() => setLoading(false));
               }}
               className="rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-950 hover:border-amber-500 disabled:opacity-50"
-              title="Trace Grossglockner + véhicule de référence"
+              title="Trace Grossglockner (pack HERE) + véhicule de référence"
             >
               Grossglockner
             </button>
@@ -379,9 +394,7 @@ export default function EnergyStudyStudio() {
             Traces corpus (temps / vitesse / pente)
           </p>
           <div className="mb-3 flex flex-wrap gap-1.5">
-            {corpusList.map((s) => {
-              const featured = s.id === "epsim_xspace_grossglockner";
-              return (
+            {corpusList.map((s) => (
               <button
                 key={s.id}
                 type="button"
@@ -389,12 +402,7 @@ export default function EnergyStudyStudio() {
                 onClick={() => {
                   setLoading(true);
                   void cycleFromCorpus(s)
-                    .then((c) =>
-                      applyCycle(
-                        c,
-                        featured ? "renault-xspace-apr2bis" : undefined
-                      )
-                    )
+                    .then((c) => applyCycle(c))
                     .catch((e) =>
                       setError(
                         e instanceof Error ? e.message : "Chargement corpus"
@@ -402,17 +410,11 @@ export default function EnergyStudyStudio() {
                     )
                     .finally(() => setLoading(false));
                 }}
-                className={`rounded-md border px-2 py-1 text-[10px] font-medium disabled:opacity-50 ${
-                  featured
-                    ? "border-amber-400 bg-amber-50 font-semibold text-amber-950 hover:border-amber-600"
-                    : "border-slate-200 text-slate-700 hover:border-brand hover:text-brand"
-                }`}
+                className="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-medium text-slate-700 hover:border-brand hover:text-brand disabled:opacity-50"
               >
-                {featured ? "★ " : ""}
                 {s.name}
               </button>
-            );
-            })}
+            ))}
             {!corpusList.length && (
               <span className="text-[11px] text-slate-400">
                 Aucun corpus sans GPS (API indisponible ?)
@@ -496,17 +498,19 @@ export default function EnergyStudyStudio() {
               disabled={loading}
               onClick={() => {
                 setLoading(true);
-                void cycleFromCorpus({
-                  id: "epsim_xspace_grossglockner",
-                  name: "Grossglockner — descente alpine (v/pente)",
-                  source: "oem",
-                  family: "oem",
-                  url: null,
-                })
-                  .then((c) => applyCycle(c, "renault-xspace-apr2bis"))
+                void (async () => {
+                  await ensureRouteStudioFitPack().catch(() => undefined);
+                  const c = getSavedCycle("rs_here_grossglockner_prudent");
+                  if (!c) {
+                    throw new Error(
+                      "Grossglockner introuvable — chargez le pack bibliothèque"
+                    );
+                  }
+                  applyCycle(c, "renault-xspace-apr2bis");
+                })()
                   .catch((e) =>
                     setError(
-                      e instanceof Error ? e.message : "Chargement EP-SIM"
+                      e instanceof Error ? e.message : "Chargement Grossglockner"
                     )
                   )
                   .finally(() => setLoading(false));

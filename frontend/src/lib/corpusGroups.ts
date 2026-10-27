@@ -3,7 +3,6 @@ import type { BenchmarkSourceMeta } from "./types";
 export const CORPUS_FAMILY_ORDER = [
   "oem",
   "alpine",
-  "xspace_avl",
   "regulatory",
   "demo",
   "ved",
@@ -13,7 +12,6 @@ export const CORPUS_FAMILY_ORDER = [
 export const CORPUS_FAMILY_LABEL: Record<string, string> = {
   oem: "OEM / constructeur",
   alpine: "Cols alpins (stress freins)",
-  xspace_avl: "Grossglockner / Route Studio (calibration)",
   regulatory: "Réglementaire / standard",
   demo: "Démo CycleGen",
   ved: "VED (GPS réel)",
@@ -27,6 +25,13 @@ export function groupBenchmarkSources(
   const buckets = new Map<string, BenchmarkSourceMeta[]>();
   for (const s of sources) {
     const fam = (s.family || "regulatory").toLowerCase();
+    if (
+      fam === "xspace_avl" ||
+      /xspace/i.test(s.id) ||
+      /xspace/i.test(s.name || "")
+    ) {
+      continue;
+    }
     const list = buckets.get(fam) ?? [];
     list.push(s);
     buckets.set(fam, list);

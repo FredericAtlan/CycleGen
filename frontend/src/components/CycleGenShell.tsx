@@ -354,7 +354,7 @@ export default function CycleGenShell() {
     () => boot?.maxSpeedKmh ?? DEFAULT_MAX_SPEED_KMH
   );
   const [vehicleId, setVehicleId] = useState<string | null>(
-    () => boot?.vehicleId ?? "renault-cspace-leapfrog-apr2bis"
+    () => boot?.vehicleId ?? "renault-xspace-apr2bis"
   );
   const [driverId, setDriverId] = useState<string | null>(
     () => boot?.driverId ?? DEFAULT_DRIVER_ID

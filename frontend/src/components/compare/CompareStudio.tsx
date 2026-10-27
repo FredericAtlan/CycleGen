@@ -117,11 +117,7 @@ type CompareCycle = SavedCycle & {
 
 function defaultVehicleIdForCycle(c: SavedCycle): string | null {
   if (c.meta?.vehicleId) return c.meta.vehicleId;
-  const hay = `${c.corpusId || ""} ${c.name || ""} ${c.source || ""}`.toLowerCase();
-  if (hay.includes("epsim") || hay.includes("xspace")) {
-    return "renault-xspace-apr2bis";
-  }
-  return "renault-cspace-leapfrog-apr2bis";
+  return "renault-xspace-apr2bis";
 }
 
 function vehicleOf(c: CompareCycle): VehicleCard | null {

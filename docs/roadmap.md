@@ -13,7 +13,7 @@
 | **Versus** | Onglet masqué sur la démo live (`isDemoOsrmOnly` / static export). |
 | **Bibliothèque** | 4 packs HERE pré-enregistrés (Grossglockner, Veleta, Iseran, Stelvio) dans `route_studio_fit_pack.json` — geo + corridor + profil pour peupler les 4 écrans. |
 | **Docs science** | Équations / modèles dans `docs/science/` (miroir `frontend/public/docs/science/`), ex. `04-idm-markov.md`. |
-| **Hébergement API** | Évalué (Render free privilégié ; blueprint `render.yaml` déjà dans le repo). **Rien déployé encore.** |
+| **Hébergement API** | **Render free live** : `https://cyclegen-api.onrender.com` (srv `cyclegen-api`, Frankfurt). Variables Pages `NEXT_PUBLIC_API_URL` / `WS` à brancher sur le build static. |
 
 ## Near-term priorities
 

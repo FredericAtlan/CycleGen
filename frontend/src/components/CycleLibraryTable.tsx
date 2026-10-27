@@ -12,8 +12,9 @@ import {
   deleteSavedCycle,
   elevationExtremesM,
   ensureRouteStudioFitPack,
-  ensureXspaceAvlSeedCycles,
   isCompleteStudioLibraryCycle,
+  isXspaceRoulageId,
+  purgeXspaceRoulagesFromLibrary,
   listSavedCycles,
   newCycleInstanceId,
   packCycle,
@@ -194,8 +195,9 @@ export default function CycleLibraryTable() {
     setCorpusLoading(true);
     void (async () => {
       try {
-        await ensureXspaceAvlSeedCycles();
+        purgeXspaceRoulagesFromLibrary();
         await ensureRouteStudioFitPack();
+        purgeXspaceRoulagesFromLibrary();
         setTick((t) => t + 1);
       } catch {
         /* optional seed */
@@ -206,7 +208,13 @@ export default function CycleLibraryTable() {
           setError("");
         } else {
           const sources = await listBenchmarkSources();
-          setCorpus(Array.isArray(sources) ? sources : []);
+          const cleaned = (Array.isArray(sources) ? sources : []).filter(
+            (s) =>
+              !isXspaceRoulageId(s.id) &&
+              (s.family || "").toLowerCase() !== "xspace_avl" &&
+              !/xspace/i.test(s.name || "")
+          );
+          setCorpus(cleaned);
           setError("");
         }
       } catch (e) {
@@ -230,6 +238,14 @@ export default function CycleLibraryTable() {
     void tick;
 
     for (const c of listSavedCycles()) {
+      if (
+        isXspaceRoulageId(c.id) ||
+        isXspaceRoulageId(c.corpusId) ||
+        /xspace/i.test(c.name || "") ||
+        /xspace/i.test(c.source || "")
+      ) {
+        continue;
+      }
       const elev =
         c.z_min_m != null || c.z_max_m != null
           ? { z_min_m: c.z_min_m ?? null, z_max_m: c.z_max_m ?? null }
@@ -331,6 +347,13 @@ export default function CycleLibraryTable() {
     }
 
     for (const m of corpus) {
+      if (
+        isXspaceRoulageId(m.id) ||
+        (m.family || "").toLowerCase() === "xspace_avl" ||
+        /xspace/i.test(m.name || "")
+      ) {
+        continue;
+      }
       const st = (m.stats ?? null) as Record<string, unknown> | null;
       out.push({
         id: `corpus:${m.id}`,

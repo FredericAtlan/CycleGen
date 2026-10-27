@@ -563,7 +563,14 @@ export function importSavedCyclesJson(raw: string): {
   }
   const incoming = list
     .map((c) => normalizeSavedCycle(c))
-    .filter((c): c is SavedCycle => c != null);
+    .filter((c): c is SavedCycle => c != null)
+    .filter(
+      (c) =>
+        !isXspaceRoulageId(c.id) &&
+        !isXspaceRoulageId(c.corpusId) &&
+        !/xspace/i.test(c.name || "") &&
+        !/xspace/i.test(c.source || "")
+    );
   if (!incoming.length) {
     return { imported: 0, total: readAll().length };
   }
@@ -581,85 +588,57 @@ export function importSavedCyclesJson(raw: string): {
   return { imported, total: next.length };
 }
 
-const XSPACE_SEED_FLAG = "cyclegen.xspaceAvlSeed.v1";
+const XSPACE_PURGE_FLAG = "cyclegen.purgeXspaceRoulages.v2";
 
-/**
- * Fetch /data/xspace_avl_seed_cycles.json once and merge into the local library.
- * Idempotent — skips if flag set and all 6 ids already present.
- */
-
-const XSPACE_LABEL_SCRUB_FLAG = "cyclegen.scrubXspaceLabels.v1";
-
-/** Remove legacy « XSPACE » brand from saved cycle labels (localStorage). */
-function scrubXspaceLabelsInSavedCycles(): number {
-  if (typeof window === "undefined") return 0;
-  if (localStorage.getItem(XSPACE_LABEL_SCRUB_FLAG) === "1") return 0;
-  const all = readAll();
-  let n = 0;
-  const next = all.map((c) => {
-    const name0 = c.name || "";
-    const source0 = c.source || "";
-    let name = name0
-      .replace(/\s*[·\-]\s*XSPACE\b/gi, "")
-      .replace(/\bXSPACE[_\s-]*/gi, "")
-      .replace(/\s{2,}/g, " ")
-      .trim();
-    let source = source0
-      .replace(/\bAVL\s*XSPACE\b/gi, "Route Studio")
-      .replace(/\bXSPACE\b/gi, "Grossglockner")
-      .replace(/\s{2,}/g, " ")
-      .trim();
-    if (!name && /xspace/i.test(name0)) name = "Grossglockner";
-    if (name !== name0 || source !== source0) {
-      n += 1;
-      return { ...c, name: name || name0, source: source || source0 };
-    }
-    return c;
-  });
-  if (n > 0) writeAll(next);
-  localStorage.setItem(XSPACE_LABEL_SCRUB_FLAG, "1");
-  return n;
+/** Ids / corpus ids treated as XSPACE roulages (excluded from library UI). */
+export function isXspaceRoulageId(id: string | null | undefined): boolean {
+  if (!id) return false;
+  const s = id.toLowerCase();
+  return (
+    s.startsWith("xspace_") ||
+    s.includes("xspace_avl") ||
+    s.includes("epsim_xspace") ||
+    s === "xspace_prea_grossglockner_ref"
+  );
 }
 
+/**
+ * Drop XSPACE seed/corpus cycles from local saved library (no re-seed).
+ * Idempotent via flag after a successful pass.
+ */
+export function purgeXspaceRoulagesFromLibrary(): {
+  removed: number;
+  total: number;
+} {
+  if (typeof window === "undefined") {
+    return { removed: 0, total: 0 };
+  }
+  const all = readAll();
+  const next = all.filter(
+    (c) =>
+      !isXspaceRoulageId(c.id) &&
+      !isXspaceRoulageId(c.corpusId) &&
+      !/xspace/i.test(c.name || "") &&
+      !/xspace/i.test(c.source || "")
+  );
+  const removed = all.length - next.length;
+  if (removed > 0) {
+    writeAll(next);
+    notifyLibraryChanged();
+  }
+  localStorage.setItem(XSPACE_PURGE_FLAG, "1");
+  localStorage.removeItem("cyclegen.xspaceAvlSeed.v1");
+  return { removed, total: next.length };
+}
+
+/** @deprecated Prefer purgeXspaceRoulagesFromLibrary — no longer imports XSPACE seeds. */
 export async function ensureXspaceAvlSeedCycles(): Promise<{
   imported: number;
   total: number;
   skipped: boolean;
 }> {
-  if (typeof window === "undefined") {
-    return { imported: 0, total: 0, skipped: true };
-  }
-  scrubXspaceLabelsInSavedCycles();
-  const expected = [
-    "xspace_avl_iseran_prudent",
-    "xspace_avl_iseran_dynamique",
-    "xspace_avl_veleta_prudent",
-    "xspace_avl_veleta_dynamique",
-    "xspace_avl_stelvio_prudent",
-    "xspace_avl_stelvio_dynamique",
-  ];
-  const existing = new Set(readAll().map((c) => c.id));
-  const missing = expected.filter((id) => !existing.has(id));
-  if (!missing.length && localStorage.getItem(XSPACE_SEED_FLAG) === "1") {
-    return { imported: 0, total: readAll().length, skipped: true };
-  }
-  try {
-    const { withBase } = await import("@/lib/basePath");
-    const res = await fetch(withBase("/data/xspace_avl_seed_cycles.json"), {
-      cache: "no-cache",
-    });
-    if (!res.ok) {
-      return { imported: 0, total: readAll().length, skipped: true };
-    }
-    const text = await res.text();
-    const { imported, total } = importSavedCyclesJson(text);
-    if (imported > 0) {
-      localStorage.setItem(XSPACE_SEED_FLAG, "1");
-    }
-    return { imported, total, skipped: false };
-  } catch {
-    return { imported: 0, total: readAll().length, skipped: true };
-  }
+  const { removed, total } = purgeXspaceRoulagesFromLibrary();
+  return { imported: -removed, total, skipped: removed === 0 };
 }
 
 const RS_FIT_PACK_FLAG = "cyclegen.routeStudioFitPack.v1";
@@ -770,7 +749,6 @@ export async function ensureRouteStudioFitPack(): Promise<{
     "rs_here_veleta_prudent",
     "rs_here_iseran_prudent",
     "rs_here_stelvio_prudent",
-    "xspace_prea_grossglockner_ref",
   ];
   const existing = new Set(readAll().map((c) => c.id));
   const missing = expected.filter((id) => !existing.has(id));
@@ -1637,11 +1615,7 @@ export function seedStudioSessionFromCycle(
           ]
       : savedCorridor?.warnings ?? [];
 
-  const corpusId = base.corpusId || "";
-  const defaultVehicle =
-    corpusId.includes("epsim") || corpusId.includes("xspace")
-      ? "renault-xspace-apr2bis"
-      : "renault-cspace-leapfrog-apr2bis";
+  const defaultVehicle = "renault-xspace-apr2bis";
 
   const buildSnap = (profile: ConsolidatedProfile | null): StudioSessionSnapshot => ({
     v: 1,
