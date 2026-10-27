@@ -12,22 +12,21 @@ export type RoutePoint = LatLon & {
 
 export type RoutingProfile = "Car/OSRM" | "Mapbox/Traffic" | "HERE/ADAS";
 
+/**
+ * Profils conducteur UI : Eco · Normal · Sport (`Sportif`).
+ * Valeurs legacy (Agressif / Prudent / Dynamique) encore acceptées en lecture
+ * de sessions sauvegardées — non proposées dans l’UI Conducteur.
+ */
 export type DriverProfile =
   | "Eco"
   | "Normal"
-  | "Agressif"
   | "Sportif"
+  | "Agressif"
   | "Prudent"
   | "Dynamique";
 
-export const DRIVER_PROFILES: DriverProfile[] = [
-  "Eco",
-  "Normal",
-  "Agressif",
-  "Sportif",
-  "Prudent",
-  "Dynamique",
-];
+/** Profils sélectionnables dans l’étape Conducteur (3 seulement). */
+export const DRIVER_PROFILES: DriverProfile[] = ["Eco", "Normal", "Sportif"];
 
 export type CycleGenWarning = {
   code: string;

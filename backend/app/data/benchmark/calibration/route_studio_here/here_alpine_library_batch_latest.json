@@ -1,0 +1,46 @@
+{
+  "created": [
+    {
+      "id": "rs_here_grossglockner_prudent",
+      "name": "HERE \u00b7 Gro\u00dfglockner \u00b7 Route_Studio_Prudent",
+      "distance_m": 14703.246165558174,
+      "duration_s": 1003.0,
+      "geo": 280,
+      "corridor_S": 697,
+      "profile_n": 1004,
+      "traffic": "HERE/maxSpeed"
+    },
+    {
+      "id": "rs_here_veleta_prudent",
+      "name": "HERE \u00b7 Pico Veleta \u00b7 Route_Studio_Prudent",
+      "distance_m": 43364.18777900767,
+      "duration_s": 2904.0,
+      "geo": 280,
+      "corridor_S": 700,
+      "profile_n": 1200,
+      "traffic": "HERE/maxSpeed"
+    },
+    {
+      "id": "rs_here_iseran_prudent",
+      "name": "HERE \u00b7 Col de l\u2019Iseran \u00b7 Route_Studio_Prudent",
+      "distance_m": 47050.66919398072,
+      "duration_s": 3097.0,
+      "geo": 280,
+      "corridor_S": 700,
+      "profile_n": 1200,
+      "traffic": "xls_gps_trace"
+    },
+    {
+      "id": "rs_here_stelvio_prudent",
+      "name": "HERE \u00b7 Stelvio \u00b7 Route_Studio_Prudent",
+      "distance_m": 37517.071549163375,
+      "duration_s": 2380.0,
+      "geo": 280,
+      "corridor_S": 700,
+      "profile_n": 1200,
+      "traffic": "HERE/maxSpeed"
+    }
+  ],
+  "errors": [],
+  "pack": "/Users/fredericatlan/Documents/CycleGen/frontend/public/data/route_studio_fit_pack.json"
+}

@@ -11,9 +11,14 @@ import {
   useHeaderChromeOptional,
   type VersusHeaderChrome,
 } from "@/components/HeaderChromeContext";
-import { canUseGpsStudio } from "@/lib/demoFlags";
+import { canUseGpsStudio, isDemoOsrmOnly } from "@/lib/demoFlags";
 import { APP_AUTHOR, APP_NAME, APP_VERSION } from "@/lib/branding";
 import { hasStudioSession } from "@/lib/studioSession";
+
+const HIDE_VERSUS_ON_DEMO =
+  isDemoOsrmOnly() ||
+  process.env.NEXT_PUBLIC_STATIC_EXPORT === "1" ||
+  process.env.CYCLEGEN_STATIC_EXPORT === "1";
 
 function VersusControls({ chrome }: { chrome: VersusHeaderChrome }) {
   return (
@@ -223,9 +228,11 @@ export default function AppHeader() {
         >
           Bibliothèque
         </Link>
-        <Link href="/compare" className={linkClass(versus)}>
-          Versus
-        </Link>
+        {!HIDE_VERSUS_ON_DEMO && (
+          <Link href="/compare" className={linkClass(versus)}>
+            Versus
+          </Link>
+        )}
         {chrome?.kind === "studio" && chrome.cycleTitle ? (
           <span
             className="ml-1 hidden min-w-0 max-w-[12rem] truncate text-[10px] font-semibold tabular-nums text-slate-500 lg:inline xl:max-w-[18rem]"

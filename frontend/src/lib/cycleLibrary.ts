@@ -14,6 +14,7 @@ import type {
   ConsolidatedProfile,
   DriverProfile,
   LatLon,
+  RouteAnalyzeResponse,
   RoutingProfile,
   SimEngine,
   SpatialCorridor,
@@ -81,6 +82,12 @@ export type SavedCycleStudioMeta = {
   elevationB_m?: number | null;
   /** Library table hint (optional). */
   has_tls?: boolean;
+  /**
+   * Pack pré-enregistré démo : trajet + corridor + conducteur + profil
+   * doivent peupler les 4 étapes du wizard à l’ouverture.
+   */
+  studioComplete?: boolean;
+  librarySigle?: boolean;
 };
 
 export type SavedCycle = {
@@ -433,13 +440,92 @@ export function notifyLibraryChanged(): void {
   window.dispatchEvent(new Event("cyclegen:library-changed"));
 }
 
-/** Ids proposés sur la démo Pages (hors ligne). */
+/** Ids proposés sur la démo Pages — 4 cycles HERE (GPS + corridor + profil). */
 export const ALPINE_DEMO_CYCLE_IDS = [
-  "rs_avl_grossglockner_prudent",
-  "rs_fit_stelvio_prudent",
-  "rs_fit_iseran_prudent",
-  "rs_fit_veleta_prudent",
+  "rs_here_grossglockner_prudent",
+  "rs_here_veleta_prudent",
+  "rs_here_iseran_prudent",
+  "rs_here_stelvio_prudent",
 ] as const;
+
+/** True when a library entry can restore wizard steps 1–4 without re-sim. */
+export function isCompleteStudioLibraryCycle(
+  cycle: Pick<SavedCycle, "geometry" | "corridor" | "time" | "velocity" | "meta">
+): boolean {
+  if (cycle.meta?.studioComplete === true || cycle.meta?.librarySigle === true) {
+    return (
+      (cycle.geometry?.length ?? 0) >= 2 &&
+      !!cycle.corridor &&
+      (cycle.corridor.S?.length ?? 0) > 1 &&
+      cycle.time.length > 1 &&
+      cycle.velocity.length === cycle.time.length
+    );
+  }
+  return (
+    (cycle.geometry?.length ?? 0) >= 2 &&
+    !!cycle.corridor &&
+    (cycle.corridor.S?.length ?? 0) > 1 &&
+    cycle.time.length > 1 &&
+    cycle.velocity.length === cycle.time.length
+  );
+}
+
+/** Synthetic route analyze payload so step Trajet shows A/B + polyline. */
+export function routeResultFromSavedCycle(
+  cycle: SavedCycle,
+  geo: LatLon[],
+  corridor: SpatialCorridor | null
+): RouteAnalyzeResponse | null {
+  if (geo.length < 2) return null;
+  const nSeg = geo.length - 1;
+  const S = corridor?.S;
+  const segment_distances_m: number[] = [];
+  if (S && S.length >= 2) {
+    const step = Math.max(1, Math.floor((S.length - 1) / nSeg));
+    for (let i = 0; i < nSeg; i++) {
+      const i0 = Math.min(i * step, S.length - 2);
+      const i1 = Math.min(i0 + step, S.length - 1);
+      segment_distances_m.push(Math.max(0, S[i1] - S[i0]));
+    }
+  } else {
+    for (let i = 0; i < nSeg; i++) segment_distances_m.push(0);
+  }
+  const dist =
+    cycle.stats.distance_m ||
+    (S && S.length ? S[S.length - 1] : segment_distances_m.reduce((a, b) => a + b, 0));
+  const dur = cycle.stats.duration_s || 1;
+  const vMean = dist / Math.max(dur, 1);
+  const elev =
+    corridor?.elevations_m && corridor.elevations_m.length === geo.length
+      ? corridor.elevations_m
+      : corridor?.elevations_m?.length
+        ? corridor.elevations_m
+        : [];
+  const lats = geo.map((p) => p.lat);
+  const lons = geo.map((p) => p.lon);
+  const label = cycle.meta?.routeLabel || cycle.meta?.saveTitle || cycle.name;
+  return {
+    geometry: geo,
+    distance_m: dist,
+    duration_s: dur,
+    segment_speeds_mps: segment_distances_m.map(() => vMean),
+    segment_distances_m,
+    elevations_m: elev,
+    traffic_signals: [],
+    bbox: [Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)],
+    origin: geo[0],
+    destination: geo[geo.length - 1],
+    origin_label: label,
+    destination_label: "Arrivée",
+    traffic_source:
+      cycle.meta?.trafficSource ?? corridor?.traffic_source ?? undefined,
+    warnings: corridor?.warnings ?? [],
+    a_y_mps2:
+      typeof cycle.meta?.aY === "number"
+        ? cycle.meta.aY
+        : corridor?.a_y_mps2 ?? undefined,
+  };
+}
 
 /** Downloadable backup of the full saved-cycle library. */
 export function exportSavedCyclesJson(): string {
@@ -681,6 +767,9 @@ export async function ensureRouteStudioFitPack(): Promise<{
     "rs_here_grossglockner_prudent",
     "rs_here_grossglockner_dynamique",
     "rs_here_grossglockner_prea",
+    "rs_here_veleta_prudent",
+    "rs_here_iseran_prudent",
+    "rs_here_stelvio_prudent",
     "xspace_prea_grossglockner_ref",
   ];
   const existing = new Set(readAll().map((c) => c.id));
@@ -1450,9 +1539,12 @@ export function seedStudioSessionFromCycle(
     .map((s) => s.trim())
     .filter(Boolean);
   const meta = base.meta;
-  const openAsStudy = intent === "study" && hasProfile;
+  const completePack = isCompleteStudioLibraryCycle(base);
+  const openAsStudy = (intent === "study" || completePack) && hasProfile;
   const noGpsBase = !hasGeo && hasProfile;
   const fullProfile = hasProfile ? profileFromSavedCycle(base, hasGeo) : null;
+  const routeResult =
+    hasGeo ? routeResultFromSavedCycle(base, geo, savedCorridor) : null;
 
   let activeStep: 1 | 2 | 3 | 4 = 1;
   let maxUnlocked: 1 | 2 | 3 | 4 = 1;
@@ -1461,6 +1553,8 @@ export function seedStudioSessionFromCycle(
   let showBaseOverlay = false;
 
   if (openAsStudy && fullProfile) {
+    // Library sigle / étude : étape Cycle visible, mais 1–3 déverrouillées
+    // et déjà peuplées (trajet, contraintes, conducteur).
     activeStep = 4;
     maxUnlocked = 4;
     stage = "completed";
@@ -1487,6 +1581,13 @@ export function seedStudioSessionFromCycle(
     activeStep = savedCorridor ? 2 : 1;
     maxUnlocked = savedCorridor ? 2 : 1;
     stage = savedCorridor ? "corridor" : "route";
+  }
+
+  // Complet GPS + corridor + profil → toujours navigable sur les 4 écrans.
+  if (completePack && fullProfile) {
+    activeStep = 4;
+    maxUnlocked = 4;
+    stage = "completed";
   }
 
   const studyTitle =
@@ -1566,7 +1667,7 @@ export function seedStudioSessionFromCycle(
     geometry: hasGeo ? geo : [],
     distanceM: base.stats.distance_m,
     durationS: base.stats.duration_s,
-    routeResult: null,
+    routeResult,
     corridor: savedCorridor,
     routingProfile,
     departAt:

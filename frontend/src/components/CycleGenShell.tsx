@@ -103,7 +103,9 @@ import {
   resolveCycleSaveName,
   stashCyclesForCompare,
   clearStashedBaseCycle,
+  isCompleteStudioLibraryCycle,
   peekStashedBaseCycle,
+  routeResultFromSavedCycle,
   seedStudioSessionFromCycle,
   slimCycleForStudioTransfer,
   peekPendingCorpusOpen,
@@ -723,7 +725,8 @@ export default function CycleGenShell() {
         .map((s) => s.trim())
         .filter(Boolean);
       const meta = base.meta;
-      const openAsStudy = intent === "study" && hasProfile;
+      const completePack = isCompleteStudioLibraryCycle(base);
+      const openAsStudy = (intent === "study" || completePack) && hasProfile;
 
       const studyTitle =
         (typeof meta?.saveTitle === "string" && meta.saveTitle.trim()) ||
@@ -828,6 +831,7 @@ export default function CycleGenShell() {
         bumpFocus({ kind: "bounds", points: geo });
         setNoGpsBase(false);
         setCorridor(savedCorridor);
+        setRouteResult(routeResultFromSavedCycle(base, geo, savedCorridor));
         if (savedCorridor?.traffic_source) {
           setTrafficSource(savedCorridor.traffic_source);
         }
@@ -921,8 +925,8 @@ export default function CycleGenShell() {
         };
       };
 
-      if (openAsStudy) {
-        // Full study restore: profile is the result, jump to analysis.
+      if (openAsStudy || completePack) {
+        // Full library / study restore: all wizard steps populated & unlocked.
         setReferenceCycle(null);
         setShowBaseOverlay(false);
         const p = buildProfile();

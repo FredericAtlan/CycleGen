@@ -2,38 +2,49 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import CycleLibraryTable from "@/components/CycleLibraryTable";
 import LibraryStorageBanner from "@/components/LibraryStorageBanner";
 import { isApiConfigured } from "@/lib/api";
 import { canUseGpsStudio, useDemoOsrmClient } from "@/lib/demoFlags";
-import { ensureRouteStudioFitPack } from "@/lib/cycleLibrary";
-import { hasStudioSession } from "@/lib/studioSession";
+import {
+  ALPINE_DEMO_CYCLE_IDS,
+  ensureAlpineDemoPack,
+  ensureRouteStudioFitPack,
+  getSavedCycle,
+  seedStudioSessionFromCycle,
+  stashBaseCycleForStudio,
+} from "@/lib/cycleLibrary";
+import { clearStudioSession, hasStudioSession } from "@/lib/studioSession";
 
-/** Bibliothèque alpine démo (fit pack localStorage). */
+/** Bibliothèque alpine démo — 4 sigles HERE (étapes 1–4 peuplées). */
 const ALPINE_DEMO_CYCLES = [
   {
-    id: "rs_avl_grossglockner_prudent",
+    id: "rs_here_grossglockner_prudent",
     label: "Grossglockner",
-    hint: "Autriche · descente AVL",
+    hint: "Autriche · HERE · sigle complet",
   },
   {
-    id: "rs_fit_stelvio_prudent",
-    label: "Stelvio",
-    hint: "Italie · Passo dello Stelvio",
-  },
-  {
-    id: "rs_fit_iseran_prudent",
-    label: "Col de l’Iseran",
-    hint: "France · Alpes",
-  },
-  {
-    id: "rs_fit_veleta_prudent",
+    id: "rs_here_veleta_prudent",
     label: "Pico Veleta",
-    hint: "Espagne · Sierra Nevada",
+    hint: "Espagne · HERE · sigle complet",
   },
-] as const;
+  {
+    id: "rs_here_iseran_prudent",
+    label: "Col de l’Iseran",
+    hint: "France · GPS RS · sigle complet",
+  },
+  {
+    id: "rs_here_stelvio_prudent",
+    label: "Stelvio",
+    hint: "Italie · HERE · sigle complet",
+  },
+] as const satisfies ReadonlyArray<{
+  id: (typeof ALPINE_DEMO_CYCLE_IDS)[number];
+  label: string;
+  hint: string;
+}>;
 
 const CycleGenShell = dynamic(() => import("@/components/CycleGenShell"), {
   ssr: false,
@@ -58,9 +69,11 @@ const EnergyStudyStudio = dynamic(
 
 export default function StudioHome() {
   const params = useSearchParams();
+  const router = useRouter();
   const mode = params.get("mode");
   const [mounted, setMounted] = useState(false);
   const [sessionOpen, setSessionOpen] = useState(false);
+  const [alpineBusy, setAlpineBusy] = useState<string | null>(null);
   const apiOk = isApiConfigured();
   const gpsOk = canUseGpsStudio();
   const demoClient = useDemoOsrmClient();
@@ -75,6 +88,27 @@ export default function StudioHome() {
       /* pack optionnel sur Pages */
     });
   }, [mounted, mode]);
+
+  const openAlpineSigle = async (id: string) => {
+    setAlpineBusy(id);
+    try {
+      await ensureRouteStudioFitPack().catch(() => undefined);
+      await ensureAlpineDemoPack().catch(() => undefined);
+      const cycle = getSavedCycle(id);
+      if (!cycle) {
+        window.alert(
+          "Cycle alpine introuvable dans la bibliothèque locale — réessayez après le chargement du pack."
+        );
+        return;
+      }
+      clearStudioSession();
+      seedStudioSessionFromCycle(cycle, "study");
+      stashBaseCycleForStudio(cycle, "study");
+      router.push("/?mode=create");
+    } finally {
+      setAlpineBusy(null);
+    }
+  };
 
   if (!mounted) {
     return (
@@ -154,7 +188,7 @@ export default function StudioHome() {
           </h1>
           <p className="mt-1.5 text-sm text-slate-500">
             Deux portes : un trajet GPS, ou une trace (t, v, pente). Bibliothèque
-            et Versus restent dans la barre du haut.
+            restent dans la barre du haut.
           </p>
         </div>
 
@@ -203,7 +237,7 @@ export default function StudioHome() {
               <span className="mt-2 text-[13px] leading-snug text-slate-500">
                 {demoClient
                   ? "Adresses ou clics carte → itinéraire OSRM → corridor démo sur la carte."
-                  : "Adresses → corridor → IDM/SUMO → profil, puis export et Versus."}
+                  : "Adresses → corridor → IDM/SUMO → profil, puis export."}
               </span>
             </Link>
           ) : (
@@ -264,23 +298,26 @@ export default function StudioHome() {
             </Link>
           </div>
           <p className="mt-1 text-[13px] leading-snug text-slate-500">
-            Cycles calibrés Route Studio (traces t, v, pente) — disponibles hors
-            ligne, sans HERE.
+            Quatre sigles HERE pré-enregistrés — à l’ouverture, trajet,
+            contraintes, conducteur et cycle sont déjà remplis (étape 4
+            visible, navigation libre sur 1–3).
           </p>
           <ul className="mt-4 grid gap-2 sm:grid-cols-2">
             {ALPINE_DEMO_CYCLES.map((c) => (
               <li key={c.id}>
-                <Link
-                  href={`/?mode=energy&saved=${c.id}`}
-                  className="flex flex-col border border-slate-200 bg-slate-50 px-3 py-2.5 transition hover:border-slate-400 hover:bg-white"
+                <button
+                  type="button"
+                  disabled={alpineBusy === c.id}
+                  onClick={() => void openAlpineSigle(c.id)}
+                  className="flex w-full flex-col border border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition hover:border-slate-400 hover:bg-white disabled:opacity-60"
                 >
                   <span className="text-[13px] font-semibold text-slate-800">
-                    {c.label}
+                    {alpineBusy === c.id ? "Ouverture…" : c.label}
                   </span>
                   <span className="mt-0.5 text-[11px] text-slate-500">
                     {c.hint}
                   </span>
-                </Link>
+                </button>
               </li>
             ))}
           </ul>

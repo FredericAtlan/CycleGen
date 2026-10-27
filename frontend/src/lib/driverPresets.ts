@@ -41,7 +41,7 @@ export function overspeedPctToSpeedFactor(pct: number): number {
   return Math.round((1 + pct / 100) * 100) / 100;
 }
 
-/** Gemini / AVL matrix — macroscopic driver presets. */
+/** Macroscopic driver presets — Eco · Normal · Sport (UI Conducteur). */
 export const DRIVER_PRESETS: DriverPresetMeta[] = [
   {
     id: "Eco",
@@ -94,6 +94,10 @@ export const DRIVER_PRESETS: DriverPresetMeta[] = [
       speed_factor: 1.1,
     },
   },
+];
+
+/** Fingerprints AVL Route Studio — hors UI Conducteur (Eco/Normal/Sport seulement). */
+export const AVL_FINGERPRINT_PRESETS: DriverPresetMeta[] = [
   {
     id: "Prudent",
     presetId: "prudent",
@@ -132,7 +136,7 @@ export const DRIVER_PRESETS: DriverPresetMeta[] = [
   },
 ];
 
-/** Standard AVL = BCB rétro-ingénierie (conservé). */
+/** Standard AVL = BCB rétro-ingénierie (conservé hors UI sélecteur). */
 export const BCB_DRIVER_PHYSICS: DriverPhysics = {
   a_max: 2.58,
   b_comf: 1.71,
@@ -156,20 +160,23 @@ export const AVL_PRESET: DriverPresetMeta = {
   physics: { ...BCB_DRIVER_PHYSICS },
 };
 
-/** All selectable UI presets (Eco · Normal · Sport · Prudent · Dynamique · Standard AVL). */
-export const UI_DRIVER_PRESETS: DriverPresetMeta[] = [
+/** Sélecteur Conducteur : Eco · Normal · Sport uniquement. */
+export const UI_DRIVER_PRESETS: DriverPresetMeta[] = [...DRIVER_PRESETS];
+
+const ALL_PRESETS_FOR_LOOKUP: DriverPresetMeta[] = [
   ...DRIVER_PRESETS,
+  ...AVL_FINGERPRINT_PRESETS,
   AVL_PRESET,
 ];
 
 export function presetFor(profile: DriverProfile): DriverPresetMeta {
   return (
-    DRIVER_PRESETS.find((p) => p.id === profile) ?? DRIVER_PRESETS[1]
+    ALL_PRESETS_FOR_LOOKUP.find((p) => p.id === profile) ?? DRIVER_PRESETS[1]
   );
 }
 
 export function uiPresetById(presetId: string): DriverPresetMeta | undefined {
-  return UI_DRIVER_PRESETS.find((p) => p.presetId === presetId);
+  return ALL_PRESETS_FOR_LOOKUP.find((p) => p.presetId === presetId);
 }
 
 export function physicsEqual(a: DriverPhysics, b: DriverPhysics): boolean {

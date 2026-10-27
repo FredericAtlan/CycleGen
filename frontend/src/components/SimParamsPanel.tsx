@@ -295,7 +295,7 @@ export default function SimParamsPanel({
           <button
             type="button"
             disabled={disabled || isDefault}
-            title="Remettre Eco/Normal/Agressif/Sport + a_y + Vmax aux valeurs par défaut (Normal)"
+            title="Remettre Eco / Normal / Sport + a_y + Vmax aux valeurs par défaut (Normal)"
             onClick={resetToDefaults}
             className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
           >

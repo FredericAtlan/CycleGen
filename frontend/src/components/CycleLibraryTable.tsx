@@ -13,6 +13,7 @@ import {
   elevationExtremesM,
   ensureRouteStudioFitPack,
   ensureXspaceAvlSeedCycles,
+  isCompleteStudioLibraryCycle,
   listSavedCycles,
   newCycleInstanceId,
   packCycle,
@@ -28,9 +29,15 @@ import ProfileDataDrawer from "@/components/ProfileDataDrawer";
 import LibraryStorageBanner from "@/components/LibraryStorageBanner";
 import { computeCycleStats, enrichSeriesFromGps } from "@/lib/cycleMetrics";
 import { parseCycleBlob } from "@/lib/parseCycleFile";
+import { isDemoOsrmOnly } from "@/lib/demoFlags";
 import { clearStudioSession } from "@/lib/studioSession";
 import { listSavedTrips } from "@/lib/tripStore";
 import type { BenchmarkSourceMeta } from "@/lib/types";
+
+const HIDE_VERSUS_ON_DEMO =
+  isDemoOsrmOnly() ||
+  process.env.NEXT_PUBLIC_STATIC_EXPORT === "1" ||
+  process.env.CYCLEGEN_STATIC_EXPORT === "1";
 
 type Kind = "saved" | "corpus" | "trip";
 
@@ -559,10 +566,11 @@ export default function CycleLibraryTable() {
         }
         return;
       }
-      // Flux 1 — créateur GPS.
+      // Flux 1 — créateur GPS. Pack complet (sigle) → étude : 4 écrans peuplés.
       clearStudioSession();
-      seedStudioSessionFromCycle(cycle, "base");
-      stashBaseCycleForStudio(cycle, "base");
+      const intent = isCompleteStudioLibraryCycle(cycle) ? "study" : "base";
+      seedStudioSessionFromCycle(cycle, intent);
+      stashBaseCycleForStudio(cycle, intent);
       router.push("/?mode=create");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Chargement échoué");
@@ -837,15 +845,17 @@ export default function CycleLibraryTable() {
                 ? "…"
                 : "Trajet GPS → cycle (Flux 1)"}
             </button>
-            <button
-              type="button"
-              disabled={loadingId === selected.id}
-              onClick={() => void sendToVersus(selected)}
-              className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              title="Comparer dans Versus (OEM vs CycleGen)"
-            >
-              Versus
-            </button>
+            {!HIDE_VERSUS_ON_DEMO && (
+              <button
+                type="button"
+                disabled={loadingId === selected.id}
+                onClick={() => void sendToVersus(selected)}
+                className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                title="Comparer dans Versus (OEM vs CycleGen)"
+              >
+                Versus
+              </button>
+            )}
             {(selected.kind === "corpus" || selected.kind === "trip") && (
               <button
                 type="button"
@@ -893,8 +903,8 @@ export default function CycleLibraryTable() {
         <span className="text-emerald-800">Trajet GPS → cycle (Flux 1)</span>{" "}
         régénère le dynamique ·{" "}
         <span className="text-amber-900">Étude énergie (Flux 2)</span> = t / v /
-        pente + véhicule (P / couple) · Versus pour comparer. Manage : Importer
-        / + Mes cycles / Renommer / Supprimer.
+        pente + véhicule (P / couple). Manage : Importer / + Mes cycles /
+        Renommer / Supprimer.
       </p>
       <div className="min-h-0 flex-1 overflow-auto">
         <table className="w-full min-w-[720px] border-collapse text-left text-xs">
