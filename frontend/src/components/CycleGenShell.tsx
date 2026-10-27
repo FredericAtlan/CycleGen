@@ -42,7 +42,7 @@ import {
   formatStaleCycleMessage,
   parseCycleParamsSnapshot,
 } from "@/lib/cycleParamsDiff";
-import { getVehicle } from "@/lib/vehicleLibrary";
+import { DEFAULT_VEHICLE_ID, getVehicle } from "@/lib/vehicleLibrary";
 import {
   DEFAULT_DRIVER_ID,
   driverLabel,
@@ -354,7 +354,7 @@ export default function CycleGenShell() {
     () => boot?.maxSpeedKmh ?? DEFAULT_MAX_SPEED_KMH
   );
   const [vehicleId, setVehicleId] = useState<string | null>(
-    () => boot?.vehicleId ?? "renault-xspace-apr2bis"
+    () => boot?.vehicleId ?? DEFAULT_VEHICLE_ID
   );
   const [driverId, setDriverId] = useState<string | null>(
     () => boot?.driverId ?? DEFAULT_DRIVER_ID
@@ -1051,7 +1051,7 @@ export default function CycleGenShell() {
           pending.vehicleId ||
           (pending.corpusId.includes("epsim") ||
           pending.corpusId.includes("xspace")
-            ? "renault-xspace-apr2bis"
+            ? DEFAULT_VEHICLE_ID
             : undefined);
         const cycle = packCycle({
           name: pending.name,

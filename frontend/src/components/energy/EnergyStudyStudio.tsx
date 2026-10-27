@@ -26,10 +26,14 @@ import { DEFAULT_A_Y } from "@/lib/driverPresets";
 import { parseCycleBlob } from "@/lib/parseCycleFile";
 import type { BenchmarkSourceMeta, ConsolidatedProfile } from "@/lib/types";
 import type { SlopeUnit } from "@/lib/units";
-import { getVehicle, type VehicleCard } from "@/lib/vehicleLibrary";
+import {
+  DEFAULT_VEHICLE_ID,
+  getVehicle,
+  type VehicleCard,
+} from "@/lib/vehicleLibrary";
 
 function defaultVehicleForCorpus(_corpusId?: string | null): string {
-  return "renault-xspace-apr2bis";
+  return DEFAULT_VEHICLE_ID;
 }
 
 async function cycleFromCorpus(
@@ -89,7 +93,7 @@ export default function EnergyStudyStudio() {
   const [info, setInfo] = useState("");
   const [cycle, setCycle] = useState<SavedCycle | null>(null);
   const [profile, setProfile] = useState<ConsolidatedProfile | null>(null);
-  const [vehicleId, setVehicleId] = useState("renault-xspace-apr2bis");
+  const [vehicleId, setVehicleId] = useState(DEFAULT_VEHICLE_ID);
   const [slopeUnit, setSlopeUnit] = useState<SlopeUnit>("percent");
   const [corpusList, setCorpusList] = useState<BenchmarkSourceMeta[]>([]);
   const [savedList, setSavedList] = useState<SavedCycle[]>([]);
@@ -320,7 +324,7 @@ export default function EnergyStudyStudio() {
                       "Grossglockner introuvable — chargez le pack bibliothèque"
                     );
                   }
-                  applyCycle(c, "renault-xspace-apr2bis");
+                  applyCycle(c, DEFAULT_VEHICLE_ID);
                 })()
                   .catch((e) =>
                     setError(
@@ -506,7 +510,7 @@ export default function EnergyStudyStudio() {
                       "Grossglockner introuvable — chargez le pack bibliothèque"
                     );
                   }
-                  applyCycle(c, "renault-xspace-apr2bis");
+                  applyCycle(c, DEFAULT_VEHICLE_ID);
                 })()
                   .catch((e) =>
                     setError(

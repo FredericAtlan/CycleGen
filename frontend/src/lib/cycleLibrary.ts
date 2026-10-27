@@ -30,6 +30,7 @@ import {
   saveStudioSession,
   type StudioSessionSnapshot,
 } from "./studioSession";
+import { DEFAULT_VEHICLE_ID } from "./vehicleLibrary";
 
 const STORAGE_KEY = "cyclegen.savedCycles.v1";
 const MAX_CYCLES = 30;
@@ -1615,7 +1616,7 @@ export function seedStudioSessionFromCycle(
           ]
       : savedCorridor?.warnings ?? [];
 
-  const defaultVehicle = "renault-xspace-apr2bis";
+  const defaultVehicle = DEFAULT_VEHICLE_ID;
 
   const buildSnap = (profile: ConsolidatedProfile | null): StudioSessionSnapshot => ({
     v: 1,

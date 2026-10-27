@@ -118,7 +118,9 @@ test.describe("GitHub Pages live demo", () => {
     expect(errors, `pageerrors: ${errors.join("; ")}`).toEqual([]);
   });
 
-  test("seed vehicles are C-Space, Grossglockner, BCB only", async ({ page }) => {
+  test("seed vehicles are BEV proxies (OEM C-Space/GG/BCB retired)", async ({
+    page,
+  }) => {
     test.setTimeout(120_000);
     await page.addInitScript(() => {
       try {
@@ -135,12 +137,10 @@ test.describe("GitHub Pages live demo", () => {
       .getByRole("button", { name: /Grossglockner/i })
       .click();
     await expect(page).toHaveURL(/mode=create/, { timeout: 60_000 });
-    // Pack restore lands on step 4 with vehicle summary visible
-    await expect(
-      page.getByText(/Véhicule \(étape Conducteur\)\s*:\s*Grossglockner/i)
-    ).toBeVisible({ timeout: 90_000 });
+    await expect(page.getByTestId("studio-stepper")).toBeVisible({
+      timeout: 90_000,
+    });
 
-    // Stepper accessible name is "3 Conducteur" (number + label)
     const conducteur = page
       .getByTestId("studio-stepper")
       .getByRole("button", { name: /Conducteur/i });
@@ -156,10 +156,7 @@ test.describe("GitHub Pages live demo", () => {
           const selects = page.locator("select");
           for (let i = 0; i < (await selects.count()); i++) {
             const texts = await selects.nth(i).locator("option").allTextContents();
-            if (
-              texts.some((t) => /C-Space/i.test(t)) &&
-              texts.some((t) => /BCB/i.test(t))
-            ) {
+            if (texts.some((t) => /ZOE-R135/i.test(t)) && texts.some((t) => /BEV-C-TM/i.test(t))) {
               return texts.filter((o) => !/^—/.test(o.trim()));
             }
           }
@@ -168,9 +165,12 @@ test.describe("GitHub Pages live demo", () => {
         { timeout: 30_000 }
       )
       .toEqual([
-        "C-Space · C-Space",
-        "Grossglockner · Grossglockner",
-        "BCB · BCB",
+        "ZOE-R135 · Renault Zoé R135 (proxy ingénierie)",
+        "LEAF-40 · Nissan Leaf 40 kWh (proxy ingénierie)",
+        "ID3-58 · Volkswagen ID.3 Pro (proxy ingénierie)",
+        "M3-RWD · Tesla Model 3 RWD (proxy ingénierie)",
+        "IONIQ5 · Hyundai Ioniq 5 (proxy ingénierie)",
+        "BEV-C-TM · BEV compact — masse d’essai type",
       ]);
   });
 });

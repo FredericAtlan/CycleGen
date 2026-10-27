@@ -55,6 +55,7 @@ import {
   type InspectSeriesId,
 } from "@/lib/chartInspectData";
 import {
+  DEFAULT_VEHICLE_ID,
   getVehicle,
   listVehicles,
   type VehicleCard,
@@ -117,7 +118,7 @@ type CompareCycle = SavedCycle & {
 
 function defaultVehicleIdForCycle(c: SavedCycle): string | null {
   if (c.meta?.vehicleId) return c.meta.vehicleId;
-  return "renault-xspace-apr2bis";
+  return DEFAULT_VEHICLE_ID;
 }
 
 function vehicleOf(c: CompareCycle): VehicleCard | null {
