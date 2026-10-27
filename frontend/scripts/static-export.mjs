@@ -66,6 +66,10 @@ try {
     NEXT_PUBLIC_STATIC_EXPORT: "1",
     NEXT_PUBLIC_API_MODE: "direct",
     NEXT_PUBLIC_BASE_PATH: basePath,
+    // Ensure Pages demo flags survive even if the shell env was empty.
+    NEXT_PUBLIC_DEMO_OSRM_ONLY:
+      process.env.NEXT_PUBLIC_DEMO_OSRM_ONLY || "1",
+    NEXT_PUBLIC_DISABLE_HERE: process.env.NEXT_PUBLIC_DISABLE_HERE || "1",
   });
   const out = path.join(root, "out");
   if (!fs.existsSync(out)) {

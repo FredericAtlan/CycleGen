@@ -9,16 +9,20 @@
  * - Les clés restent serveur (`HERE_API_KEY`, `MAPBOX_ACCESS_TOKEN` dans le backend).
  */
 
-function envFlagTrue(name: string): boolean {
-  const v = (process.env[name] || "").trim().toLowerCase();
+/**
+ * Accès STATIQUE à process.env.* — requis pour l’inline Next/Turbopack
+ * côté client. `process.env[name]` dynamique reste vide sur Pages.
+ */
+function flagTrue(raw: string | undefined): boolean {
+  const v = (raw || "").trim().toLowerCase();
   return v === "1" || v === "true" || v === "yes";
 }
 
 /** Démo live : routeurs payants / à clé désactivés dans l’UI. */
 export function isDemoOsrmOnly(): boolean {
   return (
-    envFlagTrue("NEXT_PUBLIC_DEMO_OSRM_ONLY") ||
-    envFlagTrue("NEXT_PUBLIC_DISABLE_HERE") // legacy alias
+    flagTrue(process.env.NEXT_PUBLIC_DEMO_OSRM_ONLY) ||
+    flagTrue(process.env.NEXT_PUBLIC_DISABLE_HERE) // legacy alias
   );
 }
 
