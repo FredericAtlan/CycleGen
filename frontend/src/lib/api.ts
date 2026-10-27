@@ -30,6 +30,12 @@ import {
   endApiRequestError,
   endApiRequestOk,
 } from "./apiActivity";
+import { useDemoOsrmClient } from "./demoFlags";
+import {
+  demoAnalyzeRoute,
+  demoBuildCorridor,
+  demoGeocodeAddress,
+} from "./demoOsrmClient";
 
 const STATIC_EXPORT =
   process.env.NEXT_PUBLIC_STATIC_EXPORT === "1" ||
@@ -70,7 +76,9 @@ export function isApiConfigured(): boolean {
 }
 
 export function apiOriginLabel(): string {
-  return API_URL || "— (démo hors ligne)";
+  if (API_URL) return API_URL;
+  if (useDemoOsrmClient()) return "démo OSRM (client)";
+  return "— (démo hors ligne)";
 }
 
 export function wsOriginLabel(): string {
@@ -180,11 +188,14 @@ async function postJson<T>(path: string, body: unknown, failLabel: string): Prom
   return data;
 }
 
-/** Resolve a free-text address via Nominatim (POST /api/geocode). */
+/** Resolve a free-text address via Nominatim (POST /api/geocode) or Photon (démo Pages). */
 export async function geocodeAddress(
   query: string,
   opts?: { nearLat?: number; nearLon?: number }
 ): Promise<GeocodeResult> {
+  if (useDemoOsrmClient()) {
+    return demoGeocodeAddress(query, opts);
+  }
   const body: {
     query: string;
     near_lat?: number;
@@ -217,6 +228,19 @@ export async function lookupElevations(
 export async function analyzeRoute(
   params: AnalyzeRouteParams
 ): Promise<RouteAnalyzeResponse> {
+  if (useDemoOsrmClient()) {
+    return demoAnalyzeRoute({
+      latA: params.latA,
+      lonA: params.lonA,
+      latB: params.latB,
+      lonB: params.lonB,
+      addressA: params.addressA,
+      addressB: params.addressB,
+      waypoints: params.waypoints,
+      departAt: params.departAt,
+      aY: params.aY,
+    });
+  }
   const body: RouteAnalyzeRequest = {
     lat_a: params.latA ?? null,
     lon_a: params.lonA ?? null,
@@ -293,6 +317,24 @@ export async function buildCorridor(
     speed_min_kmh: options?.speedMinKmh ?? null,
     speed_max_kmh: options?.speedMaxKmh ?? null,
   };
+
+  if (useDemoOsrmClient()) {
+    const ctx = beginApiRequest("POST", "/demo/corridor/build", {
+      pts: route.geometry?.length,
+    });
+    try {
+      const result = demoBuildCorridor(route, {
+        aY: options?.aY,
+        globalMaxSpeedKmh: options?.globalMaxSpeedKmh,
+      });
+      endApiRequestOk(ctx, { status: 200, data: result });
+      return result;
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : "Corridor démo échoué";
+      endApiRequestError(ctx, detail);
+      throw new ApiError(detail);
+    }
+  }
 
   return postJson<CorridorBuildResponse>(
     "/api/corridor/build",

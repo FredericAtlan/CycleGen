@@ -27,6 +27,21 @@ export function isHereDisabled(): boolean {
   return isDemoOsrmOnly();
 }
 
+/**
+ * Trajet GPS utilisable sur Pages même sans FastAPI :
+ * géocode Photon + route OSRM publics (client).
+ */
+export function canUseGpsStudio(): boolean {
+  const apiUrl = (process.env.NEXT_PUBLIC_API_URL || "").trim();
+  return Boolean(apiUrl) || isDemoOsrmOnly();
+}
+
+/** Pas d’API FastAPI → client OSRM/Photon pour geocode / analyze / corridor. */
+export function useDemoOsrmClient(): boolean {
+  const apiUrl = (process.env.NEXT_PUBLIC_API_URL || "").trim();
+  return !apiUrl && isDemoOsrmOnly();
+}
+
 /** Profils routeur exposés à Sidebar (Pages : OSRM seul). */
 export function pagesRouterAvailability(): {
   here: boolean;

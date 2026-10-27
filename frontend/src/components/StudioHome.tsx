@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import CycleLibraryTable from "@/components/CycleLibraryTable";
 import LibraryStorageBanner from "@/components/LibraryStorageBanner";
 import { isApiConfigured } from "@/lib/api";
+import { canUseGpsStudio, useDemoOsrmClient } from "@/lib/demoFlags";
 import { ensureRouteStudioFitPack } from "@/lib/cycleLibrary";
 import { hasStudioSession } from "@/lib/studioSession";
 
@@ -61,6 +62,8 @@ export default function StudioHome() {
   const [mounted, setMounted] = useState(false);
   const [sessionOpen, setSessionOpen] = useState(false);
   const apiOk = isApiConfigured();
+  const gpsOk = canUseGpsStudio();
+  const demoClient = useDemoOsrmClient();
   useEffect(() => setMounted(true), []);
   useEffect(() => {
     if (!mounted) return;
@@ -84,24 +87,23 @@ export default function StudioHome() {
   if (mode === "create") {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        {!apiOk && (
+        {demoClient && (
           <div
             data-testid="pages-demo-api-banner"
+            className="shrink-0 border-b border-sky-200 bg-sky-50 px-3 py-2 text-[12px] leading-snug text-sky-950"
+          >
+            Démo live : départ / arrivée via Photon + OSRM (pas de HERE/Mapbox).
+            Simulation IDM serveur indisponible sans API — le tracé et le
+            corridor démo s’affichent sur la carte.
+          </div>
+        )}
+        {!gpsOk && (
+          <div
             className="shrink-0 border-b border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-snug text-amber-950"
           >
-            Démo GitHub Pages sans backend : géocodage / corridor indisponibles.{" "}
-            <Link
-              href="/"
-              className="font-semibold underline underline-offset-2"
-            >
+            Trajet GPS indisponible.{" "}
+            <Link href="/" className="font-semibold underline underline-offset-2">
               Accueil
-            </Link>
-            {" · "}
-            <Link
-              href="/?mode=energy&saved=rs_avl_grossglockner_prudent"
-              className="font-semibold underline underline-offset-2"
-            >
-              Ouvrir Grossglockner
             </Link>
           </div>
         )}
@@ -158,21 +160,21 @@ export default function StudioHome() {
 
         <LibraryStorageBanner />
 
-        {!apiOk && (
+        {demoClient && (
           <div
             data-testid="pages-demo-home-banner"
-            className="border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-snug text-amber-950"
+            className="border border-sky-200 bg-sky-50 px-4 py-3 text-[13px] leading-snug text-sky-950"
           >
-            <p className="font-semibold">Démo hors ligne (GitHub Pages)</p>
-            <p className="mt-1 text-amber-900/90">
-              Pas d’API FastAPI configurée : le trajet GPS (géocodage, HERE,
-              simulation) ne peut pas tourner ici. Utilisez la bibliothèque
-              alpine ci-dessous.
+            <p className="font-semibold">Démo live — trajet GPS (OSRM)</p>
+            <p className="mt-1 text-sky-900/90">
+              Choisissez un départ et une arrivée : géocodage Photon + routage
+              OSRM public. HERE/Mapbox restent dans le code mais sont désactivés
+              ici. La simulation serveur nécessite une API déployée.
             </p>
           </div>
         )}
 
-        {sessionOpen && apiOk && (
+        {sessionOpen && gpsOk && (
           <Link
             href="/?mode=create"
             className="flex flex-col border-l-4 border-brand bg-white py-4 pl-4 pr-5 shadow-sm transition hover:bg-slate-50"
@@ -187,19 +189,21 @@ export default function StudioHome() {
         )}
 
         <div className="grid gap-4 sm:grid-cols-2">
-          {apiOk ? (
+          {gpsOk ? (
             <Link
               href="/?mode=create"
               className="flex flex-col border border-slate-200 bg-white p-5 transition hover:border-slate-400"
             >
               <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                Porte 1
+                Porte 1{demoClient ? " · démo OSRM" : ""}
               </span>
               <span className="mt-1 text-sm font-semibold text-slate-900">
                 Trajet GPS
               </span>
               <span className="mt-2 text-[13px] leading-snug text-slate-500">
-                Adresses → corridor → IDM/SUMO → profil, puis export et Versus.
+                {demoClient
+                  ? "Adresses ou clics carte → itinéraire OSRM → corridor démo sur la carte."
+                  : "Adresses → corridor → IDM/SUMO → profil, puis export et Versus."}
               </span>
             </Link>
           ) : (
@@ -214,8 +218,7 @@ export default function StudioHome() {
                 Trajet GPS
               </span>
               <span className="mt-2 text-[13px] leading-snug text-slate-500">
-                Nécessite une API déployée (Render / Railway). Sur cette démo,
-                ouvrez un cycle alpin.
+                Nécessite une API déployée (Render / Railway).
               </span>
             </div>
           )}
@@ -247,20 +250,11 @@ export default function StudioHome() {
 
         <section
           data-testid="alpine-demo-library"
-          className={`border bg-white p-5 ${
-            !apiOk
-              ? "border-brand/40 ring-1 ring-brand/20"
-              : "border-slate-200"
-          }`}
+          className="border border-slate-200 bg-white p-5"
         >
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-sm font-semibold text-slate-900">
               Bibliothèque alpine
-              {!apiOk ? (
-                <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-brand">
-                  recommandé
-                </span>
-              ) : null}
             </h2>
             <Link
               href="/?mode=library"
