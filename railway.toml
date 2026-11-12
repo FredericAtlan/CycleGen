@@ -1,0 +1,11 @@
+# Railway — link the GitHub repo in the dashboard, then set root / Dockerfile path.
+# Prefer Docker build of backend/ (SUMO optional, not included in free API image).
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "backend/Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"

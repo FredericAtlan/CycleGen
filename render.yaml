@@ -1,0 +1,24 @@
+# Blueprint Render — create the service from the dashboard (do not apply automatically).
+# Dashboard → New → Blueprint → connect FredericAtlan/CycleGen → this file.
+services:
+  - type: web
+    name: cyclegen-api
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: ENV
+        value: production
+      - key: CYCLEGEN_CORS_LOCALHOST_REGEX
+        value: "0"
+      - key: CORS_ORIGINS
+        sync: false
+      - key: CYCLEGEN_API_KEY
+        sync: false
+      - key: MAPBOX_ACCESS_TOKEN
+        sync: false
+      - key: HERE_API_KEY
+        sync: false

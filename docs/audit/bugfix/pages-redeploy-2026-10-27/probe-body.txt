@@ -1,0 +1,173 @@
+A
+B
+CycleGen
+v0.1.0
+Frédéric ATLAN
+Accueil
+Créer
+Bibliothèque
+PLUS
+?
+← Accueil
+Bibliothèque — Mes cycles (navigateur) · Corpus · Import
+Stockage : fredericatlan.github.io
+Exporter mes cycles
+Importer JSON
+15 cycle(s) chargés depuis le pack Route Studio.
+Tous
+Corpus
+Mes cycles
+Trajets
+Tous types
+Trajet GPS
+Énergie
+Importer…
+41 cycles
+
+2 flux : Trajet GPS → cycle (Flux 1) régénère le dynamique · Étude énergie (Flux 2) = t / v / pente + véhicule (P / couple). Manage : Importer / + Mes cycles / Renommer / Supprimer.
+
+Nom cycle
+↑
+	Créé le	Type	Résultat	Distance	Durée	v̄	vmax	Pente moy.	Pente min	Pente max	Alt. min	Alt. max	Feux
+
+AVL CRUISE — N90 Bourg-St-Maurice → Albertville (BCB)
+Cols alpins (stress freins)
+	—	Trajet GPS	
+✓
+Oui	54.5 km	42 min 37 s	77 km/h	115 km/h	-0.7 %	-7.2 %	6.7 %	—	—	—
+
+Col de l'Iseran Descent (Dénivelé Brut Max)
+Cols alpins (stress freins)
+	—	Trajet GPS	
+✓
+Oui	33.5 km	32 min 47 s	66 km/h	97 km/h	-4.0 %	-11.6 %	2.0 %	—	—	—
+
+Demo GPS Richebourg→Houdan (synthetic)
+Démo CycleGen
+	—	Trajet GPS	
+✓
+Oui	2.0 km	2 min 59 s	40 km/h	72 km/h	—	—	—	—	—	—
+
+FIT · Col de l'Iseran · dynamique
+cyclegen
+	01 oct. 2026, 17:24	Énergie	
+✓
+Oui	47.5 km	47 min 42 s	60 km/h	87 km/h	-3.8 %	-8.7 %	4.0 %	—	—	non
+
+FIT · Col de l'Iseran · prudent
+cyclegen
+	01 oct. 2026, 17:24	Énergie	
+✓
+Oui	47.5 km	52 min 3 s	55 km/h	81 km/h	-3.8 %	-8.7 %	4.0 %	—	—	non
+
+FIT · Großglockner · dynamique
+cyclegen
+	01 oct. 2026, 17:24	Énergie	
+✓
+Oui	14.7 km	12 min 22 s	71 km/h	109 km/h	-9.6 %	-12.7 %	-3.8 %	—	—	non
+
+FIT · Großglockner · prea
+cyclegen
+	01 oct. 2026, 17:24	Énergie	
+✓
+Oui	14.7 km	18 min 21 s	48 km/h	103 km/h	-9.6 %	-13.5 %	-1.5 %	—	—	non
+
+FIT · Großglockner · prudent
+cyclegen
+	01 oct. 2026, 17:24	Énergie	
+✓
+Oui	14.7 km	14 min 46 s	60 km/h	106 km/h	-9.6 %	-12.7 %	-3.8 %	—	—	non
+
+FIT · Pico Veleta · dynamique
+cyclegen
+	01 oct. 2026, 17:24	Énergie	
+✓
+Oui	43.4 km	46 min 17 s	56 km/h	98 km/h	-5.5 %	-15.3 %	14.2 %	—	—	non
+
+FIT · Pico Veleta · prudent
+cyclegen
+	01 oct. 2026, 17:24	Énergie	
+✓
+Oui	43.4 km	51 min 23 s	51 km/h	91 km/h	-5.6 %	-15.3 %	14.2 %	—	—	non
+
+FIT · Stelvio · dynamique
+cyclegen
+	01 oct. 2026, 17:24	Énergie	
+✓
+Oui	26.5 km	24 min 28 s	65 km/h	92 km/h	-6.7 %	-10.6 %	7.2 %	—	—	non
+
+FIT · Stelvio · prudent
+cyclegen
+	01 oct. 2026, 17:24	Énergie	
+✓
+Oui	26.5 km	27 min 43 s	57 km/h	91 km/h	-6.8 %	-10.6 %	7.2 %	—	—	non
+
+FTP-75 (EPA Federal Test Procedure)
+Réglementaire / standard
+	—	Réglementaire	
+✓
+Oui	17.8 km	31 min 14 s	34 km/h	91 km/h	—	—	—	—	—	non
+
+Geolife U010 taxi 20080620_1302 (Beijing GPS)
+GeoLife (GPS réel)
+	—	Trajet GPS	
+✓
+Oui	3.8 km	9 min 58 s	27 km/h	90 km/h	—	—	—	—	—	—
+
+Geolife U062 car 20080716_0238 (Beijing GPS)
+GeoLife (GPS réel)
+	—	Trajet GPS	
+✓
+Oui	4.9 km	9 min 47 s	30 km/h	62 km/h	—	—	—	—	—	—
+
+Geolife U125 car 20080909_1402 (Beijing GPS)
+GeoLife (GPS réel)
+	—	Trajet GPS	
+✓
+Oui	3.1 km	9 min 40 s	19 km/h	140 km/h	—	—	—	—	—	—
+
+Geolife U128 car 20090128_0152 (Beijing GPS)
+GeoLife (GPS réel)
+	—	Trajet GPS	
+✓
+Oui	5.6 km	10 min 30 s	29 km/h	51 km/h	—	—	—	—	—	—
+
+Geolife U153 taxi 20080516_1330 (Beijing GPS)
+GeoLife (GPS réel)
+	—	Trajet GPS	
+✓
+Oui	4.4 km	9 min 56 s	27 km/h	56 km/h	—	—	—	—	—	—
+
+Grossglockner (Renault Route Planner — profil officiel)
+OEM / constructeur
+	—	Réf. OEM	
+✓
+Oui	14.2 km	16 min 26 s	52 km/h	95 km/h	-9.5 %	-13.5 %	-1.5 %	—	—	non
+
+Grossglockner High Alpine Descent (Stress Freins)
+Cols alpins (stress freins)
+	—	Trajet GPS	
+✓
+Oui	14.2 km	12 min 23 s	68 km/h	97 km/h	-9.0 %	-13.7 %	-5.4 %	—	—	—
+
+HERE · Col de l’Iseran · Route_Studio_Prudent
+cyclegen
+	27 oct. 2026, 21:35	Trajet GPS	
+✓
+Oui	47.1 km	51 min 37 s	55 km/h	60 km/h	—	—	—	863 m	2823 m	non
+
+HERE · Großglockner · Route_Studio_Prudent
+cyclegen
+	27 oct. 2026, 21:35	Trajet GPS	
+✓
+Oui	14.7 km	16 min 43 s	53 km/h	76 km/h	—	—	—	1197 m	2624 m	non
+
+HERE · Pico Veleta · Route_Studio_Prudent
+cyclegen
+	27 oct. 2026, 21:35	Trajet GPS	
+✓
+Oui	43.4 km	48 min 24 s	54 km/h	97 km/h	—	—	—	788 m	3382 m	non
+
+HERE · Stelvio · Route_Studio_Prudent
+cyclegen
+	27 oct. 2026, 21:35	Trajet GPS
