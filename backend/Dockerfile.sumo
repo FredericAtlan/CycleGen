@@ -1,0 +1,31 @@
+# SUMO-capable image for netconvert + sumo + TraCI tools
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV SUMO_HOME=/usr/share/sumo
+ENV PATH="/usr/bin:${PATH}"
+# Writable default work dir (compose mounts sumo_work here)
+ENV SUMO_WORK_DIR=/tmp/cyclegen-sumo
+ENV SUMO_TEMPLATES=/sumo/templates
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    sumo \
+    sumo-tools \
+    python3 \
+    python3-pip \
+    curl \
+    ca-certificates \
+    bash \
+    && rm -rf /var/lib/apt/lists/* \
+    && which sumo \
+    && which netconvert \
+    && test -d "$SUMO_HOME"
+
+WORKDIR /sumo
+EXPOSE 8813
+
+# Optional: copy healthcheck into image for use when volume is not mounted
+COPY sumo/scripts/healthcheck.sh /usr/local/bin/sumo-healthcheck
+RUN chmod +x /usr/local/bin/sumo-healthcheck
+
+CMD ["sleep", "infinity"]

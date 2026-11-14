@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+out/
+dist/
+dist-ope/
+*.tsbuildinfo
+frontend/.static-export-stash/
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# SUMO runtime
+sumo/work/
+*.net.xml
+*.rou.xml
+!sumo/templates/**
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Exports / tmp
+tmp/
+*.csv
+!frontend/public/**
+!backend/app/data/benchmark/**/*.csv
+!backend/app/data/benchmark/**/*.json
+!backend/app/data/benchmark/**/*.md
+
+# Large upstream datasets (VED raw / extracted)
+backend/app/data/benchmark_sources/

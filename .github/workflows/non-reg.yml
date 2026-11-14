@@ -1,0 +1,70 @@
+name: non-reg
+
+on:
+  pull_request:
+  push:
+    branches: [staging, main, "feat/**"]
+
+concurrency:
+  group: nonreg-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  layers-a-c:
+    name: Layers A+C (unittest + typecheck)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Backend venv + deps
+        working-directory: backend
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -U pip
+          .venv/bin/pip install -r requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Non-reg Layers A+C
+        run: ./scripts/test_nonreg.sh
+
+  e2e-smoke:
+    name: Layer D (Playwright smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: layers-a-c
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend deps + Chromium
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Playwright smoke + studio-shell
+        working-directory: frontend
+        env:
+          CI: "1"
+        run: npm run test:e2e
