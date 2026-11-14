@@ -1,7 +1,12 @@
-"""Nominatim geocoding (OpenStreetMap) — address → lat/lon."""
+"""Geocoding (OpenStreetMap) — address → lat/lon.
+
+Nominatim first, Photon (komoot) as fallback when Nominatim rate-limits or
+rejects the request (shared cloud egress IPs are often throttled).
+"""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import threading
@@ -18,20 +23,30 @@ logger = logging.getLogger(__name__)
 NOMINATIM_URL = os.getenv(
     "NOMINATIM_URL", "https://nominatim.openstreetmap.org/search"
 ).rstrip("/")
+PHOTON_URL = os.getenv("PHOTON_URL", "https://photon.komoot.io/api").rstrip("/")
+
+# Identifiable User-Agent, as required by the Nominatim usage policy.
+GEOCODER_USER_AGENT = os.getenv(
+    "GEOCODER_USER_AGENT",
+    "CycleGen/0.1 (+https://github.com/FredericAtlan/CycleGen)",
+)
 
 # Nominatim public etiquette: ≤1 request / second (we use 1.1s margin).
 _GEOCODE_MIN_INTERVAL_S = 1.1
 _geocode_lock = threading.Lock()
 _geocode_last_mono = 0.0
+# Callers queue for a slot; beyond this backlog they get a 429.
+_GEOCODE_MAX_WAIT_S = 5.0
 
 
-def _throttle_geocode() -> None:
-    """In-process global rate limit for Nominatim (B10)."""
+def _reserve_geocode_slot() -> float:
+    """Reserve the next Nominatim slot; return how long to wait before it."""
     global _geocode_last_mono
     with _geocode_lock:
         now = time.monotonic()
-        elapsed = now - _geocode_last_mono
-        if _geocode_last_mono > 0.0 and elapsed < _GEOCODE_MIN_INTERVAL_S:
+        start = max(now, _geocode_last_mono + _GEOCODE_MIN_INTERVAL_S)
+        wait = start - now
+        if wait > _GEOCODE_MAX_WAIT_S:
             raise HTTPException(
                 status_code=429,
                 detail=(
@@ -39,7 +54,15 @@ def _throttle_geocode() -> None:
                     "(Nominatim etiquette). Retry shortly."
                 ),
             )
-        _geocode_last_mono = now
+        _geocode_last_mono = start
+        return wait
+
+
+async def _throttle_geocode() -> None:
+    """In-process global rate limit for Nominatim (B10): wait for a free slot."""
+    wait = _reserve_geocode_slot()
+    if wait > 0:
+        await asyncio.sleep(wait)
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -51,6 +74,49 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     dl = math.radians(lon2 - lon1)
     a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
     return 2 * r * math.asin(math.sqrt(min(1.0, a)))
+
+
+async def _photon_search(
+    client: httpx.AsyncClient,
+    q: str,
+    *,
+    near_lat: float | None,
+    near_lon: float | None,
+    countrycodes: str,
+) -> list[dict[str, Any]]:
+    """Photon fallback, mapped to Nominatim-shaped hits {lat, lon, display_name}."""
+    params: dict[str, str] = {"q": q, "limit": "5"}
+    if near_lat is not None and near_lon is not None:
+        params["lat"] = f"{near_lat}"
+        params["lon"] = f"{near_lon}"
+    try:
+        resp = await client.get(
+            PHOTON_URL,
+            params=params,
+            headers={"User-Agent": GEOCODER_USER_AGENT, "Accept": "application/json"},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except (httpx.RequestError, httpx.HTTPStatusError, ValueError) as exc:
+        logger.warning("Photon failed (%s)", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Geocoding service unavailable (Nominatim and Photon). Retry shortly.",
+        ) from exc
+
+    wanted = {c.strip().upper() for c in countrycodes.split(",") if c.strip()}
+    hits: list[dict[str, Any]] = []
+    for feat in (data or {}).get("features") or []:
+        props = feat.get("properties") or {}
+        coords = (feat.get("geometry") or {}).get("coordinates") or []
+        if len(coords) < 2:
+            continue
+        if wanted and str(props.get("countrycode") or "").upper() not in wanted:
+            continue
+        parts = [props.get(k) for k in ("name", "city", "postcode", "state", "country")]
+        label = ", ".join(dict.fromkeys(str(p) for p in parts if p))
+        hits.append({"lat": coords[1], "lon": coords[0], "display_name": label or q})
+    return hits
 
 
 async def geocode_address(
@@ -70,7 +136,7 @@ async def geocode_address(
     if len(q) < 2:
         raise HTTPException(status_code=400, detail="Address query is too short")
 
-    _throttle_geocode()
+    await _throttle_geocode()
 
     cc = (countrycodes if countrycodes is not None else os.getenv("GEOCODE_COUNTRYCODES", "fr")).strip()
     params: dict[str, str] = {
@@ -90,7 +156,7 @@ async def geocode_address(
         params["bounded"] = "0"
 
     headers = {
-        "User-Agent": "CycleGen/0.1 (engineering; contact=local)",
+        "User-Agent": GEOCODER_USER_AGENT,
         "Accept": "application/json",
     }
 
@@ -98,16 +164,23 @@ async def geocode_address(
     if owns:
         client = httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0))
     assert client is not None
+    payload: Any = None
     try:
         try:
             resp = await client.get(NOMINATIM_URL, params=params, headers=headers)
-            if resp.status_code in {406, 429, 502, 503, 504}:
+            if resp.status_code in {403, 406, 429, 502, 503, 504}:
                 raise httpx.RequestError(f"HTTP {resp.status_code}", request=resp.request)
             resp.raise_for_status()
             payload = resp.json()
         except (httpx.RequestError, httpx.HTTPStatusError, ValueError) as exc:
             logger.warning("Nominatim httpx failed (%s); curl fallback", exc)
-            payload = await _curl_json("GET", NOMINATIM_URL, params=params)
+            try:
+                payload = await _curl_json("GET", NOMINATIM_URL, params=params)
+            except (RuntimeError, ValueError) as curl_exc:
+                logger.warning("Nominatim curl failed (%s); Photon fallback", curl_exc)
+                payload = await _photon_search(
+                    client, q, near_lat=near_lat, near_lon=near_lon, countrycodes=cc
+                )
     finally:
         if owns:
             await client.aclose()

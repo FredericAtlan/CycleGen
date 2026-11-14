@@ -129,7 +129,7 @@ async def _curl_json(
         "-H",
         "Accept: application/json",
         "-H",
-        "User-Agent: CycleGen/0.1 (engineering; contact=local)",
+        "User-Agent: CycleGen/0.1 (+https://github.com/FredericAtlan/CycleGen)",
         full_url,
     ]
     if json_body is not None:
@@ -144,7 +144,10 @@ async def _curl_json(
     stdout, stderr = await proc.communicate()
     if proc.returncode != 0:
         raise RuntimeError(stderr.decode() or f"curl exit {proc.returncode}")
-    return json.loads(stdout.decode())
+    try:
+        return json.loads(stdout.decode())
+    except ValueError as exc:
+        raise RuntimeError(f"curl: non-JSON response from {url}") from exc
 
 
 class SpatialDataAcquisition:
@@ -212,7 +215,7 @@ class SpatialDataAcquisition:
                 params=params,
                 data=data,
                 json=json_body,
-                headers={"User-Agent": "CycleGen/0.1 (engineering; contact=local)"},
+                headers={"User-Agent": "CycleGen/0.1 (+https://github.com/FredericAtlan/CycleGen)"},
                 timeout=req_timeout,
             )
             if resp.status_code in {406, 429, 502, 503, 504}:
