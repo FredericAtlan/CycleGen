@@ -1,7 +1,7 @@
 """Geocoding (OpenStreetMap) — address → lat/lon.
 
-Nominatim first, Photon (komoot) as fallback when Nominatim rate-limits or
-rejects the request (shared cloud egress IPs are often throttled).
+Photon (komoot) first, Nominatim as fallback: Nominatim rate-limits shared
+cloud egress IPs (429), which cost seconds on every lookup.
 """
 
 from __future__ import annotations
@@ -83,8 +83,11 @@ async def _photon_search(
     near_lat: float | None,
     near_lon: float | None,
     countrycodes: str,
-) -> list[dict[str, Any]]:
-    """Photon fallback, mapped to Nominatim-shaped hits {lat, lon, display_name}."""
+) -> list[dict[str, Any]] | None:
+    """Photon lookup, mapped to Nominatim-shaped hits {lat, lon, display_name}.
+
+    Returns ``None`` when Photon is unreachable or answers with an error.
+    """
     params: dict[str, str] = {"q": q, "limit": "5"}
     if near_lat is not None and near_lon is not None:
         params["lat"] = f"{near_lat}"
@@ -98,11 +101,8 @@ async def _photon_search(
         resp.raise_for_status()
         data = resp.json()
     except (httpx.RequestError, httpx.HTTPStatusError, ValueError) as exc:
-        logger.warning("Photon failed (%s)", exc)
-        raise HTTPException(
-            status_code=503,
-            detail="Geocoding service unavailable (Nominatim and Photon). Retry shortly.",
-        ) from exc
+        logger.warning("Photon failed (%s); Nominatim fallback", exc)
+        return None
 
     wanted = {c.strip().upper() for c in countrycodes.split(",") if c.strip()}
     hits: list[dict[str, Any]] = []
@@ -119,6 +119,31 @@ async def _photon_search(
     return hits
 
 
+async def _nominatim_search(
+    client: httpx.AsyncClient,
+    params: dict[str, str],
+    headers: dict[str, str],
+) -> Any:
+    """Nominatim lookup (httpx, then system curl); 503 when both fail."""
+    await _throttle_geocode()
+    try:
+        resp = await client.get(NOMINATIM_URL, params=params, headers=headers)
+        if resp.status_code in {403, 406, 429, 502, 503, 504}:
+            raise httpx.RequestError(f"HTTP {resp.status_code}", request=resp.request)
+        resp.raise_for_status()
+        return resp.json()
+    except (httpx.RequestError, httpx.HTTPStatusError, ValueError) as exc:
+        logger.warning("Nominatim httpx failed (%s); curl fallback", exc)
+    try:
+        return await _curl_json("GET", NOMINATIM_URL, params=params)
+    except (RuntimeError, ValueError) as curl_exc:
+        logger.warning("Nominatim curl failed (%s)", curl_exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Geocoding service unavailable (Photon and Nominatim). Retry shortly.",
+        ) from curl_exc
+
+
 async def geocode_address(
     query: str,
     *,
@@ -127,7 +152,7 @@ async def geocode_address(
     near_lon: float | None = None,
     countrycodes: str | None = None,
 ) -> dict[str, Any]:
-    """Return {lat, lon, display_name} for the best Nominatim match.
+    """Return {lat, lon, display_name} for the best match (Photon, then Nominatim).
 
     When ``near_lat``/``near_lon`` are set, prefer candidates close to that
     point (fixes ambiguous place names like « Richebourg » near Houdan).
@@ -135,8 +160,6 @@ async def geocode_address(
     q = (query or "").strip()
     if len(q) < 2:
         raise HTTPException(status_code=400, detail="Address query is too short")
-
-    await _throttle_geocode()
 
     cc = (countrycodes if countrycodes is not None else os.getenv("GEOCODE_COUNTRYCODES", "fr")).strip()
     params: dict[str, str] = {
@@ -166,21 +189,11 @@ async def geocode_address(
     assert client is not None
     payload: Any = None
     try:
-        try:
-            resp = await client.get(NOMINATIM_URL, params=params, headers=headers)
-            if resp.status_code in {403, 406, 429, 502, 503, 504}:
-                raise httpx.RequestError(f"HTTP {resp.status_code}", request=resp.request)
-            resp.raise_for_status()
-            payload = resp.json()
-        except (httpx.RequestError, httpx.HTTPStatusError, ValueError) as exc:
-            logger.warning("Nominatim httpx failed (%s); curl fallback", exc)
-            try:
-                payload = await _curl_json("GET", NOMINATIM_URL, params=params)
-            except (RuntimeError, ValueError) as curl_exc:
-                logger.warning("Nominatim curl failed (%s); Photon fallback", curl_exc)
-                payload = await _photon_search(
-                    client, q, near_lat=near_lat, near_lon=near_lon, countrycodes=cc
-                )
+        payload = await _photon_search(
+            client, q, near_lat=near_lat, near_lon=near_lon, countrycodes=cc
+        )
+        if not payload:
+            payload = await _nominatim_search(client, params, headers)
     finally:
         if owns:
             await client.aclose()

@@ -1,4 +1,4 @@
-"""Geocoder: Nominatim rate-limited → Photon fallback; clean errors otherwise."""
+"""Geocoder: Photon first, Nominatim fallback; clean errors otherwise."""
 
 from __future__ import annotations
 
@@ -41,15 +41,13 @@ def _curl_html(*_a, **_k):
     return boom()
 
 
-def test_photon_fallback_when_nominatim_rate_limited(monkeypatch):
+def test_photon_answers_first_without_calling_nominatim(monkeypatch):
     monkeypatch.setattr(geocoder, "_curl_json", _curl_html)
     seen: list[str] = []
 
     def handler(req: httpx.Request) -> httpx.Response:
         seen.append(req.url.host)
         assert "github.com" in req.headers["user-agent"]
-        if "nominatim" in req.url.host:
-            return httpx.Response(429, text="<html>Too many requests</html>")
         return httpx.Response(200, json=PHOTON_OK)
 
     async def run():
@@ -57,9 +55,28 @@ def test_photon_fallback_when_nominatim_rate_limited(monkeypatch):
             return await geocoder.geocode_address("Houdan", client=c)
 
     hit = asyncio.run(run())
-    assert seen == ["nominatim.openstreetmap.org", "photon.komoot.io"]
+    assert seen == ["photon.komoot.io"]
     assert hit["lat"] == pytest.approx(48.7903)
     assert "78550" in hit["display_name"]
+
+
+def test_nominatim_fallback_when_photon_down(monkeypatch):
+    monkeypatch.setattr(geocoder, "_curl_json", _curl_html)
+    seen: list[str] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen.append(req.url.host)
+        if "photon" in req.url.host:
+            return httpx.Response(502, text="bad gateway")
+        return httpx.Response(200, json=[{"lat": "48.79", "lon": "1.60", "display_name": "Houdan, France"}])
+
+    async def run():
+        async with _client(handler) as c:
+            return await geocoder.geocode_address("Houdan", client=c)
+
+    hit = asyncio.run(run())
+    assert seen == ["photon.komoot.io", "nominatim.openstreetmap.org"]
+    assert hit["display_name"] == "Houdan, France"
 
 
 def test_clean_503_when_every_geocoder_fails(monkeypatch):
