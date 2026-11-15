@@ -1121,7 +1121,7 @@ export default function ResultsAnalyseStudio({
 
       // deltaY > 0 → dézoom ; sensibilité douce (molette + pinch trackpad)
       const factor = Math.exp(Math.min(80, Math.max(-80, deltaY)) * 0.0022);
-      let newW = Math.min(Math.max(5, curW * factor), Math.max(5, tripSpan || 5));
+      const newW = Math.min(Math.max(5, curW * factor), Math.max(5, tripSpan || 5));
 
       if (newW >= tripSpan - 0.5) {
         setZoomMode("full");

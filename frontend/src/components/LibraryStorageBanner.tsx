@@ -15,7 +15,7 @@ import {
 } from "@/lib/cycleLibrary";
 
 const PAGES_EMPTY_HINT =
-  "Sur GitHub Pages, la bibliothèque démarre vide : enregistrez un cycle ou importez une sauvegarde JSON (stockage navigateur de ce site uniquement).";
+  "Sur GitHub Pages, des cycles de démo (descentes du Grossglockner, du Stelvio et de l'Iseran, WLTC, trajet GPS) sont chargés depuis le corpus public de l'API. Si la bibliothèque reste vide, rechargez-les ci-dessous (stockage navigateur de ce site uniquement).";
 
 type Props = {
   /** Called after a successful import so parent can refresh lists. */
@@ -52,7 +52,7 @@ export default function LibraryStorageBanner({ onImported }: Props) {
         const alpine = await ensureAlpineDemoPack();
         if (alpine.error) setMsg(alpine.error);
         else if (alpine.imported > 0) {
-          setMsg(`${alpine.imported} cycle(s) alpins chargés.`);
+          setMsg(`${alpine.imported} cycle(s) de démo chargés.`);
         }
       } else if (full.imported > 0) {
         setMsg(`${full.imported} cycle(s) chargés depuis le pack bibliothèque.`);
@@ -170,6 +170,13 @@ export default function LibraryStorageBanner({ onImported }: Props) {
         </p>
       ) : null}
       <div className="flex flex-wrap gap-2 pt-1">
+        <button
+          type="button"
+          onClick={() => void seedLibrary()}
+          className="rounded-md bg-brand px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90"
+        >
+          Charger les cycles de démo
+        </button>
         <button
           type="button"
           onClick={() => fileRef.current?.click()}

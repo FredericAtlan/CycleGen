@@ -117,7 +117,8 @@ function writeAll(list: SavedDriver[]): void {
 
 function mergeSeeds(stored: SavedDriver[]): SavedDriver[] {
   const seedIds = new Set(SEED.map((s) => s.id));
-  return [...SEED, ...stored.filter((d) => !seedIds.has(d.id))];
+  // Seeds retirés (ex. anciens ids) : on ne garde que les conducteurs utilisateur.
+  return [...SEED, ...stored.filter((d) => !seedIds.has(d.id) && !d.seed)];
 }
 
 function readAll(): SavedDriver[] {

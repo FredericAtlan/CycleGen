@@ -392,7 +392,7 @@ export async function downloadCycleExcel(
     return true;
   });
 
-  let imgRow = 3;
+  const imgRow = 3;
   const chartW = 640;
   const chartH = 220;
   // One chart per row — 2-column layout overlapped because Excel col width ≠ px.

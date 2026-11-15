@@ -30,7 +30,7 @@ import {
   endApiRequestError,
   endApiRequestOk,
 } from "./apiActivity";
-import { useDemoOsrmClient } from "./demoFlags";
+import { isDemoOsrmClient } from "./demoFlags";
 import {
   demoAnalyzeRoute,
   demoBuildCorridor,
@@ -77,7 +77,7 @@ export function isApiConfigured(): boolean {
 
 export function apiOriginLabel(): string {
   if (API_URL) return API_URL;
-  if (useDemoOsrmClient()) return "démo OSRM (client)";
+  if (isDemoOsrmClient()) return "démo OSRM (client)";
   return "— (démo hors ligne)";
 }
 
@@ -193,7 +193,7 @@ export async function geocodeAddress(
   query: string,
   opts?: { nearLat?: number; nearLon?: number }
 ): Promise<GeocodeResult> {
-  if (useDemoOsrmClient()) {
+  if (isDemoOsrmClient()) {
     return demoGeocodeAddress(query, opts);
   }
   const body: {
@@ -228,7 +228,7 @@ export async function lookupElevations(
 export async function analyzeRoute(
   params: AnalyzeRouteParams
 ): Promise<RouteAnalyzeResponse> {
-  if (useDemoOsrmClient()) {
+  if (isDemoOsrmClient()) {
     return demoAnalyzeRoute({
       latA: params.latA,
       lonA: params.lonA,
@@ -318,7 +318,7 @@ export async function buildCorridor(
     speed_max_kmh: options?.speedMaxKmh ?? null,
   };
 
-  if (useDemoOsrmClient()) {
+  if (isDemoOsrmClient()) {
     const ctx = beginApiRequest("POST", "/demo/corridor/build", {
       pts: route.geometry?.length,
     });

@@ -7,7 +7,7 @@
     "build": "next build",
     "build:static": "node scripts/static-export.mjs",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:unit-url": "node scripts/check-api-url.mjs",
     "test:unit-bench": "node scripts/check-export-bench.mjs",

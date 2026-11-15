@@ -592,13 +592,15 @@ export function purgeHiddenRoulagesFromLibrary(): { removed: number; total: numb
   return { removed: 0, total: readAll().length };
 }
 type SeedPackResult = { imported: number; drivers: number; total: number; skipped: boolean; error?: string };
-/** Pas de pack de cycles embarqué dans cette édition (no-op). */
+/** Cycles de démo : corpus public de l'API (descentes alpines, WLTC, GPS démo). */
 export async function ensureAlpineDemoPack(): Promise<Omit<SeedPackResult, "drivers">> {
-  return { imported: 0, total: typeof window === "undefined" ? 0 : readAll().length, skipped: true };
+  const { seedLibraryFromPublicCorpus } = await import("./publicCorpusSeed");
+  return seedLibraryFromPublicCorpus({ force: true });
 }
-/** Pas de pack de cycles embarqué dans cette édition (no-op). */
+/** Amorçage unique de la bibliothèque depuis le corpus public de l'API. */
 export async function ensureLibrarySeedPack(): Promise<SeedPackResult> {
-  return { imported: 0, drivers: 0, total: typeof window === "undefined" ? 0 : readAll().length, skipped: true };
+  const { seedLibraryFromPublicCorpus } = await import("./publicCorpusSeed");
+  return { ...(await seedLibraryFromPublicCorpus()), drivers: 0 };
 }
 
 export function listSavedCycles(): SavedCycle[] {
@@ -1313,7 +1315,7 @@ export function seedStudioSessionFromCycle(
   let maxUnlocked: 1 | 2 | 3 | 4 = 1;
   let stage: StudioSessionSnapshot["stage"] = "route";
   let referenceCycle: StudioSessionSnapshot["referenceCycle"] = null;
-  let showBaseOverlay = false;
+  const showBaseOverlay = false;
 
   if (openAsStudy && fullProfile) {
     // Library sigle / étude : étape Cycle visible, mais 1–3 déverrouillées

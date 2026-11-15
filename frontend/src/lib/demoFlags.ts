@@ -41,7 +41,7 @@ export function canUseGpsStudio(): boolean {
 }
 
 /** Pas d’API FastAPI → client OSRM/Photon pour geocode / analyze / corridor. */
-export function useDemoOsrmClient(): boolean {
+export function isDemoOsrmClient(): boolean {
   const apiUrl = (process.env.NEXT_PUBLIC_API_URL || "").trim();
   return !apiUrl && isDemoOsrmOnly();
 }

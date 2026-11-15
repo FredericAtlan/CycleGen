@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import CycleLibraryTable from "@/components/CycleLibraryTable";
 import LibraryStorageBanner from "@/components/LibraryStorageBanner";
 import { isApiConfigured } from "@/lib/api";
-import { canUseGpsStudio, useDemoOsrmClient } from "@/lib/demoFlags";
+import { canUseGpsStudio, isDemoOsrmClient } from "@/lib/demoFlags";
 import {
   ensureLibrarySeedPack,
 } from "@/lib/cycleLibrary";
@@ -45,7 +45,7 @@ export default function StudioHome() {
   const [sessionOpen, setSessionOpen] = useState(false);
   const apiOk = isApiConfigured();
   const gpsOk = canUseGpsStudio();
-  const demoClient = useDemoOsrmClient();
+  const demoClient = isDemoOsrmClient();
   useEffect(() => setMounted(true), []);
   useEffect(() => {
     if (!mounted) return;

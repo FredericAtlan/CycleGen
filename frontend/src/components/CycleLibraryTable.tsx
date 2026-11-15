@@ -533,7 +533,7 @@ export default function CycleLibraryTable() {
     }
   };
 
-  const useAsBase = async (row: LibraryRow) => {
+  const applyAsBase = async (row: LibraryRow) => {
     setError("");
     setInfo("");
     setLoadingId(row.id);
@@ -840,7 +840,7 @@ export default function CycleLibraryTable() {
             <button
               type="button"
               disabled={loadingId === selected.id || !selected.has_geo}
-              onClick={() => void useAsBase(selected)}
+              onClick={() => void applyAsBase(selected)}
               className={`rounded-md px-3 py-1.5 text-[11px] font-semibold disabled:opacity-50 ${
                 selected.has_geo
                   ? "bg-brand text-white hover:bg-brand-dark"
@@ -948,10 +948,10 @@ export default function CycleLibraryTable() {
                   onClick={() => setSelectedId(r.id)}
                   onDoubleClick={() =>
                     void (r.has_geo
-                      ? useAsBase(r)
+                      ? applyAsBase(r)
                       : r.resultAvailable
                         ? openStudy(r)
-                        : useAsBase(r))
+                        : applyAsBase(r))
                   }
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
