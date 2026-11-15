@@ -1,0 +1,8 @@
+# Contexte de build Docker de l'API : ne pas embarquer les jeux bruts ni l'outillage local.
+app/data/benchmark_sources/
+.venv/
+.venv-*/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+tests/
