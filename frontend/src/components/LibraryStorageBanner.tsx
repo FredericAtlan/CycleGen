@@ -52,10 +52,10 @@ export default function LibraryStorageBanner({ onImported }: Props) {
         const alpine = await ensureAlpineDemoPack();
         if (alpine.error) setMsg(alpine.error);
         else if (alpine.imported > 0) {
-          setMsg(`${alpine.imported} cycle(s) de démo chargés.`);
+          setMsg(`${alpine.imported} cycle(s) de démo chargés dans la bibliothèque.`);
         }
       } else if (full.imported > 0) {
-        setMsg(`${full.imported} cycle(s) chargés depuis le pack bibliothèque.`);
+        setMsg(`${full.imported} cycle(s) de démo chargés dans la bibliothèque.`);
       } else if (full.error) {
         setMsg(full.error);
       }

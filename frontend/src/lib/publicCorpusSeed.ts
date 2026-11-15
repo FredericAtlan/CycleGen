@@ -100,9 +100,21 @@ function writeFlag(): void {
   }
 }
 
-export async function seedLibraryFromPublicCorpus(opts?: {
+/** Chargement en cours : partagé entre les appelants simultanés (accueil + bannière). */
+let inFlight: Promise<PublicSeedResult> | null = null;
+
+export function seedLibraryFromPublicCorpus(opts?: {
   force?: boolean;
 }): Promise<PublicSeedResult> {
+  if (!inFlight) {
+    inFlight = runSeed(opts).finally(() => {
+      inFlight = null;
+    });
+  }
+  return inFlight;
+}
+
+async function runSeed(opts?: { force?: boolean }): Promise<PublicSeedResult> {
   if (typeof window === "undefined") {
     return { imported: 0, total: 0, skipped: true };
   }
